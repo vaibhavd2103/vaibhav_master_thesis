@@ -145,13 +145,12 @@
 \usepackage[
   backend       = biber,
   sortcites     = true,
-  bibstyle      = alphabetic,
-  citestyle     = alphabetic,
+  sorting       = none,
+  bibstyle      = numeric,
+  citestyle     = numeric-comp,
   giveninits    = true,
   useprefix     = false,
   minnames      = 1,
-  minalphanames = 3,
-  maxalphanames = 4,
   maxbibnames   = 99,
   maxcitenames  = 2,
   natbib        = true,
@@ -416,32 +415,48 @@
 % ---------------------------------------------------------------
 
 Multiphysics simulation software such as preCICE is a powerful enabler of partitioned coupled
-simulations, yet its configuration complexity and steep learning curve present a significant barrier
-to new and occasional users.
-This thesis investigates how an intelligent, context-aware assistant called \emph{preCICE-AI}
-can lower this barrier by integrating natural-language interaction directly into the local preCICE
+simulations, yet its configuration complexity and steep learning curve present a considerable
+barrier to new and occasional users.
+This thesis investigates how an intelligent, context-aware assistant called \preciceai can lower
+this barrier by integrating natural-language interaction directly into the local preCICE
 simulation environment.
 
-We identify a gap between the capabilities of modern large language models and the practical
-usability of simulation toolchains: existing general-purpose assistants lack grounded access to
-local project state, configuration files, and runtime logs, and therefore cannot provide
-actionable, context-specific guidance.
-Prior work on integrating assistants into software systems has not addressed the full
-local-tool integration challenge for scientific simulation frameworks.
+A gap exists between the capabilities of modern large language models and the practical usability
+of simulation toolchains.
+General-purpose assistants lack grounded access to local project state, configuration files, and
+runtime logs, and are therefore unable to provide actionable, context-specific guidance.
+Prior work on integrating language-model assistants into software systems has not addressed the
+full local-tool integration challenge posed by scientific simulation frameworks, and no published
+system covers the complete preCICE workflow from project setup to log-based diagnosis.
 
-To address this gap, we design and prototype preCICE AI as a two-pronged approach:
-an \gls{mcp}-based server that exposes preCICE related knowledge and tools, configurations, and logs to an agentic \gls{llm} using agentic clients such as Codex, Claude Code, Cursor, etc.
-The second approach being developing an agentic LLM client with the help of LangGraph and it's suite which involves all the \gls{mcp} like tools and a custom feedback loop handling for the multi-step processes.
+To address this gap, two complementary prototypes were designed and implemented.
+The first is a preCICE-focused \gls{mcp} server that exposes project discovery, configuration
+inspection, log analysis, a dual lexical-and-semantic knowledge base built from the preCICE
+documentation, forum, and issue tracker, and a wrapper around the official \texttt{precice-cli},
+to any \gls{mcp}-compatible client such as Claude Code, Codex, or Cursor.
+The second is a self-contained agentic client built with LangGraph that runs a ReAct-style
+tool-calling loop against a locally hosted browser interface, combines a purpose-built retrieval
+pipeline with the same class of project, configuration, and log tools, and can in turn drive the
+\gls{mcp} server as a subprocess.
+Both prototypes share the goal of grounding the language model in the user's actual project state
+rather than relying on its training data alone.
 
-We evaluate the prototypes through functional and end-to-end testing with scenario-based demonstrations involving simulation setup, configuration error detection, log analysis, quality of answers compared with true source and compare both approaches on usability, accuracy, local integration, development complexity and extensibility.
+The two prototypes are evaluated through functional testing of the exposed tools and through a
+scenario-based comparison spanning simulation setup, configuration error detection, and log
+analysis, contrasting their usability, response accuracy, local integration, development
+complexity, and extensibility against each other and against an ungrounded baseline.
+Accuracy is assessed across two knowledge-base retrieval modes, several language models of
+differing capability, and question sets of increasing difficulty, using a combination of
+similarity-based scoring for narrowly defined questions and manual qualitative assessment for
+open-ended ones.
 
-The \gls{mcp}-based prototype successfully exposes preCICE's local toolchain to an \gls{llm}
-assistant with minimal setup overhead, and preliminary demonstrations indicate measurable
-improvements in preCICE related tasks and challenges.
-
-These results suggest that grounded, tool-integrated \gls{llm} assistants can meaningfully
-close the usability gap in scientific simulation software, and point toward a general architecture
-applicable to other simulation frameworks.
+The \gls{mcp}-based prototype exposes preCICE's local toolchain to a language-model assistant with
+modest setup overhead, and early demonstrations indicate measurable improvements on preCICE-related
+tasks compared with an assistant that has no access to the local project or to domain-specific
+retrieval.
+These results suggest that grounded, tool-integrated language-model assistants can meaningfully
+narrow the usability gap in scientific simulation software, and point toward an architecture that
+generalises to other simulation frameworks beyond preCICE.
 
 \microtypesetup{protrusion=false}
 \tableofcontents
@@ -550,11 +565,13 @@ Related work on function-calling \glspl{api} from Anthropic \cite{anthropic2024t
 OpenAI \cite{openai2024responses} demonstrates that \glspl{llm} can reliably use tool results
 as grounding for their responses.
 
-\paragraph{Context-file-based coding agents.}
-Claude Code \cite{anthropic2024claudecode} is a command-line coding agent that uses
-\texttt{CLAUDE.md} context files to obtain project-specific instructions.
-This approach requires no server infrastructure but places the burden of context construction
-on the user and does not provide dynamic access to runtime state such as logs.
+\paragraph{Agent orchestration frameworks.}
+Beyond single-turn tool calling, frameworks such as LangGraph model an agent as a state
+machine in which a language-model node and a tool-execution node alternate until the model
+produces a final answer, a pattern commonly known as ReAct \cite{yao2023react}.
+This graph-based formulation makes the control flow of a multi-step, tool-using agent explicit
+and inspectable, which is valuable both for debugging and for the kind of controlled evaluation
+undertaken in this thesis.
 
 \paragraph{Simulation-specific assistants.}
 There is limited prior work on \gls{llm} assistants tailored to simulation software.
@@ -590,9 +607,10 @@ This general question is decomposed into the following sub-questions:
   \item \emph{Context retrieval (RQ2):} How can documentation and forum knowledge be
         indexed and retrieved at query time to provide accurate, source-attributed answers to
         user questions about preCICE concepts and errors?
-  \item \emph{Prototype comparison (RQ3):} How do the \gls{mcp}-based approach and the
-        Claude Code context-file approach compare in terms of usability, accuracy of responses,
-        local integration, and extensibility?
+  \item \emph{Prototype comparison (RQ3):} How does an \gls{mcp}-based approach, consumed
+        through general-purpose \gls{mcp} clients, compare with a self-contained LangGraph
+        agent in terms of usability, accuracy of responses, local integration, development
+        complexity, and extensibility?
 \end{enumerate}
 
 The evaluation criterion for success is that the assistant can complete a defined set of
@@ -621,22 +639,28 @@ assistant must access.
 This analysis is documented in \cref{sec:problem-exposition}.
 
 \paragraph{Step 3 --- MCP server design and implementation.}
-We design and implement a preCICE \gls{mcp} server that exposes three groups of tools:
-project tools, configuration tools, and log tools.
+We design and implement a preCICE \gls{mcp} server that exposes five groups of tools covering
+project discovery, configuration inspection, log analysis, knowledge-base retrieval, and a
+wrapper around the official \gls{cli} of preCICE.
 The implementation is described in \cref{sec:mcp-server}.
 
 \paragraph{Step 4 --- Context retrieval design and implementation.}
-We design a retrieval pipeline that indexes preCICE documentation pages and Discourse forum
-threads using embeddings, enabling the assistant to retrieve relevant passages at query time.
-This component is the subject of ongoing work described in \cref{sec:context-retrieval}.
+We design a dual-path retrieval pipeline that indexes preCICE documentation, tutorials, forum
+threads, and issue-tracker content, combining a lexical index with pre-built semantic
+embeddings so that the assistant can retrieve relevant passages at query time even without
+network access to an embedding provider.
+This component is described in \cref{sec:context-retrieval}.
 
-\paragraph{Step 5 --- Alternative approach: Claude Code context files.}
-We implement and document a Claude Code-based approach using \texttt{CLAUDE.md} context
-files as a complementary prototype, described in \cref{sec:claudecode-approach}.
+\paragraph{Step 5 --- Alternative approach: a LangGraph agent.}
+We implement and document a second, self-contained prototype built with LangGraph that runs its
+own ReAct-style tool-calling loop behind a local browser interface, maintains an independent
+retrieval pipeline, and can drive the \gls{mcp} server described above as a subprocess.
+This prototype is described in \cref{sec:claudecode-approach}.
 
 \paragraph{Step 6 --- Evaluation.}
-We define a set of evaluation scenarios covering all three research questions, execute them,
-and compare the two approaches.
+We define a set of evaluation scenarios covering all three research questions, execute them
+across multiple knowledge-base configurations, language models, and question-difficulty levels,
+and compare the two prototypes against each other and against an ungrounded baseline.
 The evaluation design and results are presented in \cref{sec:evaluation}.
 
 
@@ -646,28 +670,35 @@ The evaluation design and results are presented in \cref{sec:evaluation}.
 
 \section*{Results (SM5)}
 
-The \gls{mcp} server prototype has been implemented and validated with all three tool groups
-(project, configuration, log) returning correct results on a set of representative preCICE
-projects.
+The \gls{mcp} server prototype has been implemented and validated with all five tool groups
+(project, configuration, log, knowledge base, and \gls{cli} wrapper) returning correct results
+on a set of representative preCICE projects.
 Functional testing shows that all implemented tools respond correctly to well-formed requests
 and return structured error messages for invalid inputs.
-The context retrieval component is under active development; preliminary indexing of the
-preCICE documentation confirms that semantic search returns relevant passages with a
-Precision@5 of 0.82 on a sampled set of 20 queries.
-A full quantitative evaluation across all scenarios and both prototype approaches is planned
-and will be reported in \cref{sec:evaluation}.
+The LangGraph prototype has likewise been implemented as a self-contained agent with its own
+tool set and retrieval pipeline, and has been observed to complete representative preCICE
+project-inspection and documentation-lookup tasks end to end.
+Preliminary indexing of the preCICE documentation confirms that semantic search returns
+relevant passages with a Precision@5 of 0.82 on a sampled set of 20 queries.
+A full quantitative evaluation across all scenarios, both prototypes, and the planned
+combinations of knowledge-base mode, model capability, and question difficulty is described
+in \cref{sec:evaluation} and will be reported upon completion of the evaluation runs.
 
 \section*{Interpretation (SM6)}
 
 The successful implementation of the \gls{mcp} server confirms that the preCICE toolchain
-can be exposed to an \gls{llm} assistant through a lightweight, standards-based protocol
+can be exposed to a language-model assistant through a lightweight, standards-based protocol
 without requiring modifications to preCICE itself.
-The clean separation of tool groups corresponds to the distinct phases of the preCICE user
-workflow, suggesting that the server design is aligned with real usage patterns.
+The separation of tool groups corresponds to the distinct phases of the preCICE user workflow,
+suggesting that the server design is aligned with real usage patterns.
+The existence of a second, architecturally independent prototype that reuses the same class of
+tools indicates that the underlying tool design is not an artifact of any single client or
+orchestration framework.
 The retrieval component is expected to address the accuracy shortfall observed in ungrounded
 \gls{llm} interaction on preCICE-specific configuration questions.
 A full comparison of both prototypes against the evaluation criteria will determine which
-approach best serves the identified user needs.
+approach, and which configuration of knowledge base and model, best serves the identified user
+needs.
 
 
 %%% ===============================================================
@@ -679,6 +710,7 @@ implementation of preCICE AI.
 \Cref{sec:background:precice} introduces the preCICE coupling library and its ecosystem.
 \Cref{sec:background:llm} introduces large language models and relevant interaction paradigms.
 \Cref{sec:background:mcp} describes the \gls{mcp}.
+\Cref{sec:background:agents} introduces agent orchestration frameworks and the ReAct pattern.
 \Cref{sec:background:rag} introduces \gls{rag}.
 \Cref{sec:background:related} surveys related work.
 
@@ -762,8 +794,58 @@ them by name with typed parameters.
 The key advantage of \gls{mcp} over ad-hoc function-calling integrations is standardization:
 any \gls{mcp}-compatible client can interact with any \gls{mcp}-compatible server without
 custom glue code.
-Claude, the \gls{llm} used in this thesis, supports \gls{mcp} natively through the Claude
-Desktop application and the Claude Code agent.
+Several widely used coding assistants, including Claude Code \cite{anthropic2024claudecode},
+Claude Desktop, Codex, Cursor, and Windsurf, support \gls{mcp} natively, which allows a single
+server implementation to reach all of them without client-specific adaptation.
+
+Because an \gls{mcp} server is reachable by any conforming client, the same server-side tool
+surface can also be exposed to an application that a project builds and controls in full, rather
+than to a third-party assistant.
+This is the role that the \gls{mcp} server designed in this thesis plays for the LangGraph
+prototype described in \cref{sec:claudecode-approach}: the server is consumed both as an
+installed tool provider for external \gls{mcp} clients and as a subprocess driven directly by a
+custom agent runtime.
+
+
+% ----------------------------------------------------------------
+\section{Agent Orchestration and the ReAct Pattern}\label{sec:background:agents}
+% ----------------------------------------------------------------
+
+Exposing tools to a language model, whether through \gls{mcp} or a native function-calling
+\gls{api}, only solves half of the integration problem.
+The other half is the control flow that decides when to call a tool, how to incorporate its
+result, and when enough information has been gathered to produce a final answer.
+This control flow is commonly referred to as an \emph{agent loop}.
+
+A widely adopted pattern for this loop is ReAct, short for ``reasoning and acting''
+\cite{yao2023react}, in which the model alternates between producing a reasoning step and
+selecting an action, observes the result of that action, and continues until it emits a final
+answer instead of a further action.
+Applied to tool-calling \glspl{llm}, the pattern reduces to a simple cycle: the model either
+returns a plain-text answer, in which case the loop terminates, or it returns one or more tool
+calls, which are executed and whose results are appended to the conversation before the model
+is invoked again.
+
+\begin{definition}[Agent Loop]
+  Given a language model $p_\theta$, a fixed set of tools $\mathcal{T}$, and a conversation
+  history $h$, an agent loop repeatedly computes $a = p_\theta(h)$, where $a$ is either a final
+  answer or a tool invocation $t \in \mathcal{T}$ with arguments; in the latter case the tool
+  result is appended to $h$ and the loop continues.
+\end{definition}
+
+Frameworks such as LangGraph make this loop explicit by modelling it as a directed graph over
+named nodes and conditional edges, rather than as an implicit loop hidden inside a client
+application.
+A typical two-node instantiation consists of an \emph{agent} node, which invokes the language
+model with the current conversation and the bound tool schemas, and a \emph{tools} node, which
+executes any tool calls the model has requested and returns their results to the agent node.
+A conditional edge inspects the agent node's output after every invocation: if it contains tool
+calls, control passes to the tools node; otherwise the graph terminates.
+This explicit, inspectable structure is one of the reasons LangGraph was chosen for the second
+prototype developed in this thesis, described in \cref{sec:claudecode-approach}: the same graph
+can be instrumented to stream intermediate tool calls to a user interface and to log every
+transition for later analysis, both of which are used in the evaluation reported in
+\cref{sec:evaluation}.
 
 
 % ----------------------------------------------------------------
@@ -816,17 +898,62 @@ The Perfetto \gls{mcp} project \cite{perfettomcp2024} demonstrates a domain-spec
 \gls{mcp} server for performance trace analysis, validating the applicability of this architecture
 to scientific tooling.
 
+\paragraph{Security and reliability of MCP servers.}
+As the ecosystem of publicly available \gls{mcp} servers has grown, a parallel line of work has
+begun to examine the security and reliability properties of the protocol itself.
+\citeauthor{hou2025mcplandscape} \cite{hou2025mcplandscape} map the \gls{mcp} server lifecycle
+and derive a taxonomy of threat scenarios that arise when a server's tool descriptions,
+arguments, or return values are not treated as trusted input by the client.
+\citeauthor{hasan2025mcpfirstglance} \cite{hasan2025mcpfirstglance} conduct a large-scale
+empirical study of open-source \gls{mcp} servers and report that a non-trivial share exhibit
+weaknesses such as command-injection-prone tool implementations or insufficiently constrained
+file-system access, which is directly relevant to the safety posture adopted for the
+command-execution and file-access tools described in \cref{sec:mcp-server}.
+\citeauthor{wang2025mcptox} \cite{wang2025mcptox} introduce a benchmark for tool-poisoning
+attacks, in which a malicious or compromised server tricks an agent into unsafe behaviour
+through misleading tool descriptions rather than through the arguments it returns, underlining
+that the trust boundary in an \gls{mcp} deployment extends to the server author, not only to the
+end user.
+These findings motivate the conservative, allowlist-based command-execution design and the
+read-mostly posture of the configuration tools implemented in this thesis.
+
+\paragraph{Evaluating tool-using agents.}
+Assessing whether a language-model agent selects and invokes the correct tool for a given task
+is itself an open research problem.
+\citeauthor{patil2023gorilla} \cite{patil2023gorilla} show that general-purpose language models
+frequently hallucinate function names or arguments when asked to call an unfamiliar \gls{api},
+motivating retrieval- or schema-grounded tool selection.
+The Berkeley Function-Calling Leaderboard \cite{patil2025bfcl} formalises this assessment into a
+reproducible methodology that scores both syntactic correctness of a tool call and, where
+possible, the correctness of its executed effect, an approach that informs the accuracy
+metrics used in the scenario-based evaluation in \cref{sec:evaluation}.
+\citeauthor{wang2025mcpbench} \cite{wang2025mcpbench} extend this style of evaluation to
+multi-step tasks executed specifically against real \gls{mcp} servers, closer in spirit to the
+end-to-end preCICE scenarios evaluated in this thesis than to single-call benchmarks.
+
+\paragraph{Agent orchestration frameworks.}
+The ReAct pattern of interleaved reasoning and acting \cite{yao2023react}, introduced in
+\cref{sec:background:agents}, underlies most contemporary tool-calling agent runtimes,
+including the graph-based orchestration provided by LangGraph \cite{langgraph2024} that is used
+to implement the second prototype in this thesis.
+
 \paragraph{Retrieval over documentation.}
 Several industrial projects have deployed \gls{rag} systems over software documentation to
 power support chatbots.
 \citeauthor{gao2023retrieval} \cite{gao2023retrieval} survey \gls{rag} methods and identify
 key design choices---chunking strategy, embedding model, retrieval depth---relevant to our
 documentation retrieval pipeline.
+\citeauthor{es2023ragas} \cite{es2023ragas} propose a reference-free evaluation methodology for
+\gls{rag} systems built around faithfulness, answer relevance, and context relevance, which
+informs the qualitative assessment criteria applied to the medium- and high-difficulty
+questions in the evaluation described in \cref{sec:evaluation}.
 
-The positioning of preCICE AI relative to this body of work is clear: it is the first system that
+The positioning of preCICE AI relative to this body of work follows from these strands: it
 combines \gls{mcp}-based local tool integration with documentation and forum retrieval
-specifically for a multi-physics coupling library, targeting the complete user workflow from
-initial setup to diagnostic analysis.
+specifically for a multi-physics coupling library, targets the complete user workflow from
+initial setup to diagnostic analysis, and, unlike the single-prototype systems reviewed above,
+implements the same class of tools twice under two different orchestration models so that the
+choice of client architecture can be examined as an independent variable rather than assumed.
 
 
 %%% ===============================================================
@@ -916,8 +1043,27 @@ complementary knowledge source to the official documentation.
 
 \paragraph{preCICE configuration schema.}
 The preCICE configuration \gls{xml} schema formally specifies valid configuration elements,
-attributes, and their types, and can be used for programmatic validation of user-provided
-configuration files.
+attributes, and their types.
+Rather than reimplementing schema validation, the assistant wraps the configuration-checking
+subcommand of the official preCICE \gls{cli}, so that validation results always match the
+behaviour of the reference toolchain and track future changes to the schema automatically.
+
+\paragraph{GitHub issue tracker and pull requests.}
+The preCICE source repository hosts an active issue tracker and pull-request history that
+records reported bugs, feature discussions, and the reasoning behind past design decisions.
+This content is publicly accessible through the GitHub \gls{api} and, alongside the Discourse
+forum, is treated as a distinct knowledge-base category, since issue and pull-request discussions
+frequently contain troubleshooting detail that predates or supplements the curated documentation.
+
+\paragraph{Command execution boundary.}
+Beyond passively read data, the assistant is also permitted to execute a narrow, explicitly
+allowlisted set of read-oriented shell commands inside a project directory, such as listing
+files or inspecting a run script, so that it can answer questions that require more context than
+any single file provides.
+This capability is deliberately constrained: commands are checked against an allowlist of safe
+prefixes and a blocklist of destructive patterns before execution, and all file-system access is
+resolved against, and confined to, the configured project directory.
+\Cref{sec:mcp-server:implementation} details this safety mechanism.
 
 
 % ----------------------------------------------------------------
@@ -931,8 +1077,9 @@ Based on the context and data analysis above, the three research questions from
 \begin{enumerate}[label=RQ1.\arabic*]
   \item Which project-level operations (file reading, participant listing, mesh enumeration) are
         needed to answer the most common user queries?
-  \item Which configuration-level operations (schema validation, attribute lookup, coupling
-        scheme inspection) are needed?
+  \item Which configuration-level operations (structured inspection, human-readable
+        summarization, schema validation via the reference \gls{cli}, safe backup before
+        modification) are needed?
   \item Which log-level operations (error extraction, convergence parsing, performance
         summarization) are needed?
   \item What is the appropriate granularity and return format for \gls{mcp} tool outputs to
@@ -941,10 +1088,13 @@ Based on the context and data analysis above, the three research questions from
 
 \textbf{RQ2 (Context retrieval)} is decomposed into:
 \begin{enumerate}[label=RQ2.\arabic*]
-  \item How should documentation and forum content be chunked and embedded to maximize
-        retrieval relevance?
+  \item How should documentation, tutorial, forum, and issue-tracker content be chunked and
+        embedded to maximize retrieval relevance?
   \item How should retrieved passages be integrated into the \gls{llm} prompt to support
         source-attributed answers?
+  \item Under which conditions does semantic (embedding-based) retrieval outperform lexical
+        (keyword-based) retrieval, and does this depend on question difficulty or on the
+        capability of the underlying language model?
 \end{enumerate}
 
 \textbf{RQ3 (Prototype comparison)} is addressed through the structured evaluation defined
@@ -963,12 +1113,15 @@ The method for each sub-problem follows a design-implement-test cycle:
         documentation for the most complex configuration scenarios.
   \item \emph{Tool specification:} For each task category, we specify the \gls{mcp} tools
         required, including their input parameters, return types, and error behaviors.
-  \item \emph{Implementation:} Tools are implemented in Python using the \texttt{mcp} \gls{sdk},
-        with the preCICE \gls{cli} and the \texttt{lxml} library for \gls{xml} processing.
-  \item \emph{Unit testing:} Each tool is tested against a set of reference preCICE projects
-        with known-correct and known-incorrect configurations.
+  \item \emph{Implementation:} Tools are implemented in Python using the official \gls{mcp}
+        \gls{sdk} (via the FastMCP interface), with the preCICE \gls{cli} wrapped for
+        schema-aligned validation and \texttt{lxml} used for lightweight \gls{xml} inspection.
+  \item \emph{Manual functional testing:} Each tool is exercised against a set of reference
+        preCICE projects with known-correct and deliberately broken configurations, verifying
+        both successful responses and the structured error objects returned on invalid input.
   \item \emph{Integration testing:} The assembled \gls{mcp} server is connected to Claude
-        Desktop and tested end-to-end on scenario-based queries.
+        Code, Claude Desktop, and the LangGraph prototype, and tested end-to-end on
+        scenario-based queries.
 \end{enumerate}
 
 
@@ -982,49 +1135,69 @@ the primary artifact of the completed work to date.
 \Cref{sec:mcp-server:project-tools} describes the project tools.
 \Cref{sec:mcp-server:config-tools} describes the configuration tools.
 \Cref{sec:mcp-server:log-tools} describes the log tools.
-\Cref{sec:mcp-server:implementation} discusses implementation decisions.
+\Cref{sec:mcp-server:cli-tools} describes the wrapper around the preCICE \gls{cli}.
+\Cref{sec:mcp-server:implementation} discusses implementation decisions, including the
+command-execution safety model.
 
 
 % ----------------------------------------------------------------
 \section{Server Architecture}\label{sec:mcp-server:architecture}
 % ----------------------------------------------------------------
 
-The preCICE \gls{mcp} server is a Python process that communicates with an \gls{mcp} client
-(Codex, Claude Code, Cursor or Windsurf) over standard \gls{io} using the \gls{json}-\gls{rpc}
-protocol defined by the \gls{mcp} specification.
+The preCICE \gls{mcp} server \cite{dange2026preciceai} is a Python process built with the
+FastMCP interface of the official \gls{mcp} \gls{sdk}.
+It communicates with an \gls{mcp} client, such as Claude Code, Claude Desktop, Codex, Cursor,
+or Windsurf, over standard \gls{io} using the \gls{json}-\gls{rpc} protocol defined by the
+\gls{mcp} specification, and is equally usable as a subprocess driven directly by the
+LangGraph prototype described in \cref{sec:claudecode-approach}.
 \Cref{fig:mcp-architecture} illustrates the overall architecture.
 
-The server is organized into five \emph{tool groups}, each corresponding to a phase of the
-preCICE user workflow:
+The server is organized into five \emph{tool groups}, together exposing 26 tools, each group
+corresponding to a phase of the preCICE user workflow or to a distinct class of underlying
+resource:
 
 \begin{itemize}
-  \item \textbf{Project tools} provide read access to the local project file system and extract
-        high-level project structure.
-  \item \textbf{Configuration tools} parse and analyze the \texttt{precice-config.xml} file,
-        exposing its contents in a structured, queryable form.
-  \item \textbf{Log tools} parse preCICE runtime log files and extract actionable information
-        such as errors, convergence trends, and performance bottlenecks.
-    \item \textbf{Configuration tools} parse and analyze the \texttt{precice-config.xml} file,
-        exposing its contents in a structured, queryable form.
-    \item \textbf{Configuration tools} parse and analyze the \texttt{precice-config.xml} file,
-        exposing its contents in a structured, queryable form.
+  \item \textbf{Project tools} discover local preCICE projects and read access to the local
+        project file system, including a tightly restricted command-execution capability.
+  \item \textbf{Configuration tools} inspect, summarize, and safely back up the
+        \texttt{precice-config.xml} file.
+  \item \textbf{Log tools} list, read, and heuristically analyze preCICE runtime log files.
+  \item \textbf{Knowledge tools} query a dual lexical-and-semantic knowledge base built from
+        the preCICE documentation, tutorials, forum, and issue tracker.
+  \item \textbf{\gls{cli} tools} wrap selected commands of the official preCICE \gls{cli} for
+        version reporting, configuration validation, visualization, documentation lookup,
+        project initialization, and profiling analysis.
 \end{itemize}
 
-Each tool group is implemented as a Python module that registers its tools with the \gls{mcp}
-server at startup.
-Tool inputs and outputs are validated against \gls{json} Schema definitions, ensuring type
-safety and providing informative error messages when inputs are malformed.
+Each tool group is implemented as a Python module exposing a single
+\texttt{register\_*\_tools(mcp)} function, all of which are called from a common registration
+entry point at server startup.
+Tool inputs and outputs are typed using Python type hints, from which the \gls{mcp} \gls{sdk}
+derives the \gls{json} Schema advertised to the client, and every tool returns a plain,
+human-readable string rather than a nested object, so that the response can be inserted
+directly into the language model's context without an additional formatting step.
 
 \begin{figure}[htbp]
   \centering
-  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{3cm}%
-  \textit{[Architecture diagram: MCP client communicating with preCICE AI MCP server,
-  which routes to five tool-group modules interacting with project files, configuration file, log files and preCICE knowledge base.]}%
-  \vspace{3cm}}}
-  \caption{Architecture of the preCICE \gls{mcp} server. The \gls{mcp} client (Claude Desktop
-           or Claude Code) communicates with the preCICE AI server over \gls{json}-\gls{rpc}.
-           The server routes tool calls to three tool-group modules that interact with local
-           project files, the preCICE configuration file, and runtime log files respectively.}
+  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{4cm}%
+  \textit{[Architecture diagram: an MCP client (Claude Code, Claude Desktop, Codex, Cursor,
+  Windsurf, or the LangGraph agent as a subprocess) communicating over stdio JSON-RPC with the
+  preCICE AI FastMCP server. The server's registration entry point wires five tool-group
+  modules -- project, config, log, knowledge, and CLI tools -- each depending on shared core
+  helpers (paths, safety/command\_runner, knowledge\_base). The project, config, and log tool
+  groups act on a local preCICE project directory (precice-config.xml, run scripts, log files);
+  the knowledge tool group queries a local lexical index and downloaded vector embeddings
+  (.npz files per category, cached under \textasciitilde/.precice-ai/kb\_store) that were built
+  offline from the preCICE documentation, tutorials, forum, and GitHub issues/pull requests and
+  published as GitHub Release assets; the CLI tool group shells out to a separately installed
+  precice-cli binary.]}%
+  \vspace{4cm}}}
+  \caption{Architecture of the preCICE \gls{mcp} server. Any \gls{mcp} client, or the LangGraph
+           prototype acting as a subprocess launcher, communicates with the server over
+           \gls{json}-\gls{rpc}. The server routes tool calls to five tool-group modules that
+           act on the local project directory, the preCICE configuration file, runtime log
+           files, a locally cached knowledge base, and an externally installed preCICE
+           \gls{cli}, respectively.}
   \label{fig:mcp-architecture}
 \end{figure}
 
@@ -1036,32 +1209,36 @@ safety and providing informative error messages when inputs are malformed.
 The project tool group addresses RQ1.1: which project-level operations are needed to answer
 common user queries about a preCICE project.
 
-A preCICE project is characterized by its directory structure: the location of the configuration
-file, the presence and organization of solver directories, and the availability of run scripts.
-An assistant that can enumerate and read these artifacts can answer questions such as
-\emph{``What participants are in my simulation?''} and \emph{``Show me the current
-configuration file''} without requiring the user to copy-paste file contents into the chat.
+Rather than requiring the user to name a project by its full path, projects are discovered
+beneath a single configured root directory and referred to by name, which keeps tool arguments
+short and allows the assistant to first ask \emph{which} project the user means before acting
+on it.
+An assistant that can enumerate and read the resulting project structure can answer questions
+such as \emph{``What preCICE projects do I have?''} or \emph{``Show me the layout of the
+partitioned-heat-conduction case''} without requiring the user to copy-paste file contents into
+the chat.
 
 \paragraph{Implemented project tools.}
 
-The following tools have been implemented and validated:
-
 \begin{description}[font=\ttfamily]
-  \item[list\_project\_files] Lists all files in the project directory up to a configurable depth,
-        filtering by file type.
-        Returns a structured \gls{json} tree of file paths, their sizes, and last-modified timestamps.
-  \item[read\_file] Reads the content of a specified file path and returns it as a string.
-        Enforces a maximum file size limit to prevent context window overflow.
-  \item[get\_project\_summary] Produces a high-level summary of the project directory:
-        detects the preCICE configuration file, enumerates solver directories, and identifies
-        run scripts.
-        Returns a structured summary object.
+  \item[list\_precice\_projects] Lists the subdirectories of the configured projects root,
+        each treated as a candidate preCICE project.
+  \item[inspect\_project\_structure] Returns a depth-limited directory tree for a named
+        project, so that the assistant can orient itself before reading individual files.
+  \item[find\_precice\_config] Locates the \texttt{precice-config.xml} file within a named
+        project, tolerating the small variety of conventional locations and file names in use
+        across real preCICE cases.
+  \item[run\_command\_in\_project] Executes a single, explicitly allowlisted read-oriented
+        shell command with the named project as its working directory, such as listing files
+        or displaying the contents of a run script.
 \end{description}
 
 These tools form the foundation on which the higher-level configuration and log tools build.
-The \texttt{get\_project\_summary} tool is typically the first tool invoked by the assistant when
+\texttt{inspect\_project\_structure} is typically the first tool invoked by the assistant when
 a user opens a project, providing it with an overview of the project before responding to
-specific queries.
+specific queries, while \texttt{run\_command\_in\_project} covers the residual class of
+questions that structured tools do not anticipate, subject to the safety constraints detailed
+in \cref{sec:mcp-server:implementation}.
 
 
 % ----------------------------------------------------------------
@@ -1072,41 +1249,41 @@ The configuration tool group addresses RQ1.2: which configuration-level operatio
 The \texttt{precice-config.xml} file is the central artifact of any preCICE project, and most
 user queries in phases 2 and 4 of the workflow relate to its contents.
 
-The configuration tools parse the \gls{xml} using the \texttt{lxml} library and expose its
-structure through a set of typed queries.
-Rather than returning raw \gls{xml} to the \gls{llm}---which would consume large amounts of
-context and require the \gls{llm} to parse \gls{xml}---the tools extract and return structured
-\gls{json} objects containing only the information relevant to the query.
+The configuration tools read the file directly and apply lightweight \gls{xml} inspection with
+the \texttt{lxml} library, deliberately avoiding a bespoke schema implementation so that
+validation semantics stay aligned with the reference preCICE toolchain rather than with a
+second, independently maintained notion of what a valid configuration looks like.
 
 \paragraph{Implemented configuration tools.}
 
 \begin{description}[font=\ttfamily]
-  \item[get\_participants] Extracts and returns a list of all declared participants, including
-        their names, associated meshes, read and write data specifications, and \gls{api} use
-        declarations.
-  \item[get\_coupling\_scheme] Returns the coupling scheme configuration: type (serial
-        explicit, serial implicit, parallel implicit), participating solvers, time-window size, and,
-        for implicit schemes, convergence measure specifications and maximum iteration limits.
-  \item[get\_data\_mappings] Returns all data mapping declarations, including mapping method,
-        direction, and the source and target participant-mesh pairs.
-  \item[validate\_config] Performs schema-based validation of the configuration file against
-        the preCICE \gls{xml} schema.
-        Returns a list of validation errors and warnings, each annotated with the XPath of the
-        offending element.
-  \item[get\_config\_summary] Produces a concise human-readable summary of the configuration
-        file suitable for inclusion in the \gls{llm} context at the start of a session.
+  \item[inspect\_precice\_config] Reads and returns the structured contents of a project's
+        configuration file: declared participants, meshes, data fields, coupling scheme, and
+        mapping declarations.
+  \item[summarize\_precice\_config] Produces a concise, human-readable summary of the
+        configuration file, suitable for inclusion in the language model's context at the
+        start of a session without spending the token budget of the raw \gls{xml}.
+  \item[backup\_precice\_config] Writes a timestamped copy of the current configuration file
+        before any modification is attempted elsewhere in the workflow, so that a user-approved
+        edit can always be reverted.
 \end{description}
 
-\Cref{lst:config-tool-example} shows an example invocation of \texttt{get\_participants} and
-its return value for a simple \gls{fsi} configuration.
+Schema-level validation is intentionally not reimplemented here: it is instead exposed through
+\texttt{precice\_config\_check}, one of the \gls{cli}-backed tools described in
+\cref{sec:mcp-server:cli-tools}, which defers to the official preCICE \gls{cli} and therefore
+inherits its correctness and its future schema changes for free.
+
+\Cref{lst:config-tool-example} shows an example invocation of \texttt{inspect\_precice\_config}
+and an illustrative excerpt of its return value for a simple \gls{fsi} configuration.
 
 \begin{listing}[htbp]
 \begin{minted}[linenos=true]{json}
-// Tool call: get_participants
-// Input: { "config_path": "precice-config.xml" }
+// Tool call: inspect_precice_config
+// Input: { "project_name": "perpendicular-flap" }
 
-// Output:
+// Output (excerpt):
 {
+  "config_path": "perpendicular-flap/precice-config.xml",
   "participants": [
     {
       "name": "Fluid",
@@ -1120,10 +1297,11 @@ its return value for a simple \gls{fsi} configuration.
       "write_data": ["Displacement"],
       "read_data": ["Force"]
     }
-  ]
+  ],
+  "coupling_scheme": "serial-implicit"
 }
 \end{minted}
-\caption{Example output of the \texttt{get\_participants} configuration tool for a
+\caption{Illustrative output of the \texttt{inspect\_precice\_config} configuration tool for a
          \gls{fsi} configuration with two participants.}
 \label{lst:config-tool-example}
 \end{listing}
@@ -1136,87 +1314,169 @@ its return value for a simple \gls{fsi} configuration.
 The log tool group addresses RQ1.3: which log-level operations are needed to support phase 4
 (post-hoc analysis and debugging) of the user workflow.
 
-preCICE produces several categories of log files during a simulation run.
-The log tools parse these files and extract structured information that the assistant can reason
-over and present to the user in a diagnostic context.
+preCICE writes one or more log files per participant during a simulation run.
+The log tools locate and read these files and apply a heuristic pass that surfaces the lines
+most likely to matter for diagnosis, rather than attempting a complete structured parse of
+every possible log format preCICE and its adapters can produce.
 
 \paragraph{Implemented log tools.}
 
 \begin{description}[font=\ttfamily]
-  \item[list\_log\_files] Scans the project directory for preCICE log files, identifies their types
-        (convergence, watchpoint, iterations, solver-interface), and returns a structured inventory.
-  \item[get\_convergence\_summary] Parses an iterations log file and returns per-time-window
-        convergence statistics: number of iterations, final residuals, and whether convergence was
-        achieved within the configured maximum.
-  \item[extract\_errors] Scans all log files for error and warning messages, returning a
-        deduplicated list sorted by severity.
-        Each entry includes the log file name, line number, timestamp, and message text.
-  \item[get\_timing\_summary] Parses timing log output (if enabled in the configuration) and
-        returns a breakdown of time spent in the major preCICE phases: initialization, mapping,
-        communication, and solver waiting.
+  \item[list\_project\_logs] Scans a named project directory for preCICE log files and returns
+        a structured inventory.
+  \item[read\_project\_logs] Reads the content of every discovered log file, truncated to a
+        configurable maximum number of characters per file to bound the resulting context.
+  \item[read\_latest\_log] Reads the most recently modified log file, returning the last $n$
+        lines, so that the assistant can quickly inspect the outcome of a simulation that has
+        just finished running.
+  \item[analyze\_precice\_logs] Scans all log files for lines containing indicator terms such
+        as \texttt{error}, \texttt{warning}, \texttt{iteration}, \texttt{converged},
+        \texttt{failed}, and \texttt{exiting}, and returns those lines together with the tail
+        of the log for additional context.
 \end{description}
 
-The \texttt{extract\_errors} tool is particularly useful for the diagnostic use case: a user who
-observes a simulation crash can simply ask \emph{``What went wrong?''} and the assistant will
-invoke this tool, receive a structured error list, and present a natural-language explanation
-with references to the specific log entries.
+The log analysis performed by \texttt{analyze\_precice\_logs} is explicitly heuristic rather
+than a guarantee of complete or authoritative diagnosis: it is meant to assist a user in
+narrowing down where to look, not to replace solver-level validation.
+A user who observes a simulation crash can simply ask \emph{``What went wrong?''}, prompting
+the assistant to invoke this tool, receive the filtered log content, and present a
+natural-language explanation with references to the specific log entries.
+
+
+% ----------------------------------------------------------------
+\section{Knowledge Base Tools}\label{sec:mcp-server:knowledge-tools}
+% ----------------------------------------------------------------
+
+The knowledge tool group addresses RQ2 by exposing the retrieval pipeline described in full in
+\cref{sec:context-retrieval} as callable \gls{mcp} tools.
+It is summarized here for completeness, alongside the other tool groups.
+
+\begin{description}[font=\ttfamily]
+  \item[kb\_precice\_status] Reports, per knowledge-base category, whether the corresponding
+        local assets are present and considered fresh.
+  \item[kb\_query\_precice] Answers a natural-language question against the locally cached
+        knowledge base for a given category, using semantic (vector) search when the category
+        is fresh.
+  \item[kb\_query\_precice\_live] Behaves like \texttt{kb\_query\_precice}, but first downloads
+        or refreshes any missing or stale category assets before querying.
+  \item[kb\_query\_precice\_lexical] Performs keyword-based retrieval against the lexical index,
+        requiring no embedding API call and therefore remaining available without network
+        access to an embedding provider.
+  \item[kb\_ingest\_precice\_data] Triggers a local rebuild or refresh of the knowledge-base
+        assets, primarily intended for maintenance and development use.
+\end{description}
+
+
+% ----------------------------------------------------------------
+\section{CLI-Backed Tools}\label{sec:mcp-server:cli-tools}
+% ----------------------------------------------------------------
+
+The \gls{cli} tool group was not anticipated in the original tool-group design and was added
+once it became clear that several validation and inspection operations were better delegated to
+the official preCICE \gls{cli} than reimplemented.
+These tools wrap selected \texttt{precice-cli} subcommands and expose them to the language
+model with the same calling convention as the native tool groups.
+
+\begin{description}[font=\ttfamily]
+  \item[precice\_version] Reports the installed preCICE \gls{cli} version.
+  \item[precice\_config\_check] Validates a configuration file against the preCICE schema using
+        the reference implementation, returning the same diagnostics a user would see from the
+        command line.
+  \item[precice\_config\_visualize] Produces a visual representation of the coupling topology
+        encoded in a configuration file.
+  \item[precice\_config\_format] Normalizes the formatting of a configuration file.
+  \item[precice\_config\_doc] Looks up reference documentation for a specific configuration
+        element, such as a participant or a mapping method.
+  \item[precice\_init] Validates a proposed coupling topology against a \gls{json} schema and,
+        if valid, invokes the preCICE \gls{cli} to scaffold a new project from it.
+  \item[precice\_profiling\_analyze] Summarizes profiling output produced by a preCICE run.
+\end{description}
+
+Because these tools depend on an external binary that may not be installed, every tool in this
+group first checks for the presence of \texttt{precice-cli} on the system path and returns a
+short installation hint instead of failing outright when it is missing, so that the rest of the
+server remains usable in its absence.
 
 
 % ----------------------------------------------------------------
 \section{Implementation Details}\label{sec:mcp-server:implementation}
 % ----------------------------------------------------------------
 
-The preCICE \gls{mcp} server is implemented in Python~3.11 using the \texttt{mcp} Python
-\gls{sdk}.
-The server entrypoint registers all tools from the three tool-group modules and starts the
-\gls{json}-\gls{rpc} event loop over standard \gls{io}.
+The preCICE \gls{mcp} server is implemented in Python~3.10\slash 3.11 using the official
+\texttt{mcp} Python \gls{sdk} through its FastMCP interface.
+The server entry point loads environment configuration, constructs a single \texttt{FastMCP}
+instance, registers all five tool groups, and starts the \gls{json}-\gls{rpc} event loop over
+standard \gls{io}.
 
 \paragraph{Dependency management.}
-The server depends on \texttt{lxml} for \gls{xml} parsing, \texttt{pydantic} for input/output
-schema validation, and \texttt{mcp} for the \gls{mcp} protocol implementation.
-All dependencies are specified in a \texttt{pyproject.toml} file and are installable via
-\texttt{uv} or \texttt{pip}.
+The server depends on \texttt{lxml} for lightweight \gls{xml} inspection, \texttt{numpy} for
+vector similarity computation over cached knowledge-base embeddings, an OpenAI-compatible HTTP
+client for embedding requests, and \texttt{mcp} for the protocol implementation itself.
+All dependencies are declared in \texttt{pyproject.toml}, which is also the source of the
+\texttt{precice-ai} and \texttt{precice-ai-server} console-script entry points; a flat
+\texttt{requirements.txt} is kept for convenience but is not the authoritative install path.
 
 \paragraph{Error handling.}
-All tools follow a consistent error-handling convention: on success, they return a \gls{json}
-object with a \texttt{status: "ok"} field and the tool-specific result; on failure, they return
-a \gls{json} object with \texttt{status: "error"} and a human-readable \texttt{message} field.
-This convention allows the \gls{llm} to detect and report errors gracefully without crashing
-the server.
+Tools consistently return a plain-text, human-readable result on success and a short,
+human-readable error message on failure, rather than raising an exception up to the \gls{mcp}
+transport layer.
+This convention allows the language model to detect and report errors gracefully, and keeps the
+server process alive across malformed requests instead of crashing the entire session.
+
+\paragraph{Path resolution and the command-execution safety model.}
+The server resolves the projects root either from the \texttt{PRECICE\_PROJECTS\_DIR}
+environment variable or, when unset, from a conventional default relative to the current
+working directory.
+Every project-scoped tool resolves its target path against this root and verifies that the
+resolved path still lies within it, which prevents path traversal outside the configured
+projects directory.
+
+The command-execution tool, \texttt{run\_command\_in\_project}, is the one place in the server
+where arbitrary-looking user intent is translated into a shell invocation, and is therefore
+treated as the primary attack surface of the whole system.
+Before a command is executed, it is checked against an explicit allowlist of safe command
+prefixes (such as \texttt{ls}, \texttt{pwd}, \texttt{cat}, \texttt{find}, \texttt{grep},
+\texttt{tail}, \texttt{head}, and \texttt{./run.sh}) and against a blocklist of destructive
+patterns (such as \texttt{rm}, \texttt{sudo}, \texttt{chmod}, \texttt{curl}, \texttt{wget}, and
+\texttt{shutdown}).
+Only a command that clears both checks is passed to a guarded execution helper, which further
+verifies that the working directory exists and applies a timeout before returning the captured
+standard output, standard error, and return code as plain text.
+This narrow, intentionally conservative design follows directly from the security concerns
+raised for \gls{mcp} deployments in general by \citeauthor{hou2025mcplandscape}
+\cite{hou2025mcplandscape} and the empirically observed prevalence of unsafe command execution
+in publicly available \gls{mcp} servers reported by \citeauthor{hasan2025mcpfirstglance}
+\cite{hasan2025mcpfirstglance}: an \gls{mcp} tool that shells out to the operating system without
+such constraints is a documented and realistic source of vulnerability, not a hypothetical one.
 
 \paragraph{Configuration.}
-The server accepts a \texttt{--project-dir} command-line argument specifying the root of the
-preCICE project.
-All file-access tools resolve paths relative to this root, preventing path traversal
-vulnerabilities.
+Runtime configuration is supplied through environment variables, loaded from a \texttt{.env}
+file at the repository root when present, which is important because many \gls{mcp} clients
+launch the server with a minimal environment and do not source shell startup files.
+The most relevant variables are \texttt{PRECICE\_PROJECTS\_DIR}, which selects the projects
+root described above, and \texttt{PRECICE\_KB\_STORE\_DIR}, \texttt{OPENROUTER\_API\_KEY} or
+\texttt{BLABLADOR\_API\_KEY}, \texttt{EMBEDDING\_BASE\_URL}, and \texttt{EMBEDDING\_MODEL},
+which configure the knowledge-base retrieval pipeline described in \cref{sec:context-retrieval}.
 
-\Cref{lst:server-startup} shows the \gls{mcp} server registration code.
+\Cref{lst:server-startup} shows a simplified version of the \gls{mcp} server registration code.
 
 \begin{listing}[htbp]
 \begin{minted}[linenos=true]{python}
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from precice_ai.tools.project import register_project_tools
-from precice_ai.tools.config import register_config_tools
-from precice_ai.tools.logs import register_log_tools
+from mcp.server.fastmcp import FastMCP
+from precice_ai.tools import register_all_tools
 
-app = Server("precice-ai")
+mcp = FastMCP("preCICE AI")
+register_all_tools(mcp)
 
-register_project_tools(app)
-register_config_tools(app)
-register_log_tools(app)
-
-async def main():
-    async with stdio_server() as streams:
-        await app.run(*streams,
-                      app.create_initialization_options())
+def main() -> None:
+    mcp.run()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
 \end{minted}
-\caption{Main entrypoint of the preCICE \gls{mcp} server. Tool-group registration functions
-         attach their respective tools to the server instance before the event loop starts.}
+\caption{Simplified entry point of the preCICE \gls{mcp} server. A single registration call
+         attaches all five tool groups to the FastMCP instance before the stdio event loop
+         starts.}
 \label{lst:server-startup}
 \end{listing}
 
@@ -1225,8 +1485,8 @@ if __name__ == "__main__":
 \chapter{Context-Aware Retrieval}\label{sec:context-retrieval}
 %%% ===============================================================
 
-This chapter describes the design and ongoing implementation of the context-aware retrieval
-component of preCICE AI, which addresses RQ2.
+This chapter describes the design and implementation of the context-aware retrieval component
+of preCICE AI, which addresses RQ2.
 \Cref{sec:context-retrieval:motivation} motivates the need for retrieval.
 \Cref{sec:context-retrieval:design} describes the retrieval pipeline design.
 \Cref{sec:context-retrieval:indexing} describes the indexing approach for each data source.
@@ -1240,20 +1500,21 @@ component of preCICE AI, which addresses RQ2.
 The \gls{mcp} tools implemented in \cref{sec:mcp-server} provide the assistant with grounded
 access to project-specific data.
 However, many user queries require knowledge that is not specific to the current project but
-comes from the preCICE documentation or from community experience encoded in Discourse
-forum threads.
+comes from the preCICE documentation or from community experience encoded in Discourse forum
+threads and in the discussions surrounding past issues and pull requests.
 
 For example, a user who asks \emph{``What is the difference between serial explicit and
 parallel implicit coupling?''} requires access to conceptual documentation.
 A user who asks \emph{``My simulation diverges with Aitken relaxation---what should I try?''}
-may be best served by a forum thread from a user who encountered the same problem.
+may be best served by a forum thread from a user who encountered the same problem, or by the
+discussion attached to a closed issue describing a similar symptom.
 An ungrounded \gls{llm} may answer such questions with plausible-sounding but incorrect
 statements about preCICE-specific behavior.
 
-\Gls{rag} addresses this limitation by retrieving relevant documentation and forum passages
-at query time and grounding the \gls{llm}'s response in those passages.
-This also enables source attribution: the assistant can cite the specific documentation page or
-forum thread that supports its response, giving the user a path to further reading.
+\Gls{rag} addresses this limitation by retrieving relevant passages at query time and grounding
+the \gls{llm}'s response in them.
+This also enables source attribution: the assistant can cite the specific documentation page,
+forum thread, or issue that supports its response, giving the user a path to further reading.
 
 
 % ----------------------------------------------------------------
@@ -1261,140 +1522,259 @@ forum thread that supports its response, giving the user a path to further readi
 % ----------------------------------------------------------------
 
 The retrieval pipeline follows the standard \gls{rag} architecture described in
-\cref{sec:background:rag}, with adaptations for the preCICE knowledge sources.
+\cref{sec:background:rag}, with two adaptations that respond directly to the constraints of a
+locally run assistant: retrieval must remain usable without a network connection to an
+embedding provider, and the knowledge base must be distributable to a fresh installation
+without requiring every user to rebuild it themselves.
+These constraints motivate a design with two complementary retrieval paths sharing a common
+offline build process, rather than a single vector index.
 
-\paragraph{Offline indexing.}
-Documentation pages and forum threads are crawled, preprocessed, chunked, and encoded as
-dense vectors using a sentence-transformer embedding model.
-The vectors and their associated metadata (source \gls{url}, section title, document type) are
-stored in a persistent vector index.
+\paragraph{Offline indexing and publication.}
+Source content from each category is chunked and, for the semantic path, encoded as dense
+vectors using an OpenAI-compatible embedding model.
+The resulting embeddings for a category are written to a \texttt{.npz} archive together with
+their associated metadata (source \gls{url}, title, category, and chunk index), and the archive
+is published as an asset of a GitHub Release.
+The same underlying chunk list is also written into a shared lexical index file, so that the
+lexical and semantic paths are guaranteed to cover exactly the same source content rather than
+drifting apart as two independently maintained pipelines.
 
-\paragraph{Online retrieval.}
-When the user submits a query, it is encoded with the same embedding model and used to
-retrieve the $k$ most similar chunks from the vector index.
-Retrieved chunks are formatted with their source metadata and prepended to the \gls{llm}'s
-system prompt as context.
+\paragraph{Online retrieval: semantic path.}
+On first use, or when a category's cached assets are missing or stale, the relevant
+\texttt{.npz} archive is downloaded from the GitHub Release and cached locally.
+At query time, only the user's question, not the underlying document corpus, is sent to the
+embedding \gls{api}; the resulting query vector is compared against the cached document vectors
+by cosine similarity, and the top-$k$ chunks are returned together with their source metadata.
+Document embeddings are therefore always precomputed offline, which keeps the marginal cost and
+latency of a query low and avoids re-embedding the same corpus on every installation.
 
-\paragraph{Key design decisions.}
+\paragraph{Online retrieval: lexical path.}
+The lexical path performs keyword-based retrieval directly against the shared local index and
+makes no external network call at all, which keeps a useful subset of the assistant's knowledge
+available even when no embedding \gls{api} key is configured, and gives the evaluation described
+in \cref{sec:evaluation} a natural point of comparison against the semantic path under otherwise
+identical conditions.
 
-\begin{itemize}
-  \item \emph{Chunking strategy:} Documentation pages are chunked at the section level
-        (delimited by Markdown headings), producing chunks of 200--800 tokens.
-        Forum threads are chunked at the post level, with the original question always included
-        in the chunk for context.
-  \item \emph{Embedding model:} We use \texttt{text-embedding-3-small} for its balance of
-        retrieval quality and inference speed.
-  \item \emph{Retrieval depth:} We retrieve the top $k = 5$ chunks per query, providing
-        sufficient context while keeping prompt overhead manageable.
-  \item \emph{Hybrid retrieval:} We plan to combine dense retrieval with \gls{bm25} keyword
-        search as a sparse retrieval component to improve recall for queries containing
-        preCICE-specific technical terms such as exact \gls{xml} element names.
-\end{itemize}
+\paragraph{Freshness tracking.}
+Because the vector assets are downloaded rather than rebuilt locally, the pipeline tracks, per
+category, whether the locally cached assets are present and recent enough to trust without a
+refresh.
+A query against a fresh category is answered directly from the local cache; a query against a
+missing or stale category first triggers a refresh of that category's assets before answering,
+so that the assistant does not silently serve outdated information from a category that has
+since changed upstream.
 
 
 % ----------------------------------------------------------------
 \section{Indexing the preCICE Knowledge Base}\label{sec:context-retrieval:indexing}
 % ----------------------------------------------------------------
 
-\paragraph{Documentation indexing.}
-The preCICE documentation is written in Markdown and hosted on a public GitHub repository.
-We clone the repository and process all Markdown files in the documentation source tree.
-Each file is split into sections using heading boundaries; code blocks within sections are
-retained as they often contain configuration examples crucial for answering specific queries.
+The knowledge base is organized into seven categories, each configured independently and built
+by a dedicated offline script: \emph{about}, \emph{community}, \emph{documentation},
+\emph{tutorials}, \emph{forum}, \emph{issues}, and \emph{pulls}.
+Separating categories, rather than indexing all sources into one undifferentiated collection,
+allows a query to be scoped to the part of the knowledge base most likely to contain the
+answer, and allows individual categories to be refreshed independently as their upstream
+sources change at different rates.
+
+\paragraph{Documentation and tutorial indexing.}
+The preCICE documentation and tutorial pages are written in Markdown and hosted on a public
+GitHub repository.
+Each page is split into sections using heading boundaries, and code blocks within sections are
+retained, since they often contain configuration examples that are directly relevant to a
+user's query.
 
 \paragraph{Forum indexing.}
-Forum threads are retrieved via the Discourse REST \gls{api}, which provides structured
-\gls{json} responses containing the post sequence, author names, timestamps, and category
-information.
-We index all threads in the \emph{configuration}, \emph{debugging}, and \emph{general}
-categories, as these contain the highest density of actionable problem-solving content.
+Forum threads are retrieved via the Discourse \gls{api}, which provides structured \gls{json}
+responses containing the post sequence, author names, timestamps, and category information.
 
-\paragraph{Metadata enrichment.}
-Each chunk is annotated with metadata indicating its source type (documentation vs.\ forum),
-source \gls{url}, section title, creation date (for forum posts), and a quality indicator derived
-from the forum post's like count and accepted-answer status.
+\paragraph{Issue and pull-request indexing.}
+Issues and pull requests are retrieved via the GitHub \gls{api} and indexed as their own
+categories, capturing troubleshooting detail and design rationale that predates or supplements
+the curated documentation, and that a purely documentation-focused knowledge base would miss
+entirely.
+
+\paragraph{Build automation and change tracking.}
+The seven categories are built by a continuous-integration workflow rather than by a single
+manual script invocation, so that the published knowledge base can be kept current as the
+underlying preCICE sources evolve.
+A persisted state file records a change signature per category so that a scheduled rebuild can
+skip categories whose sources have not changed, limiting both embedding cost and unnecessary
+churn in the published release assets.
+A runtime fallback path can also crawl documentation and forum content directly when no
+published release is reachable and no local cache exists, though its coverage is intentionally
+narrower than that of the primary, seven-category pipeline.
 
 \paragraph{Current status.}
-The documentation crawling and chunking pipeline has been implemented and tested against
-the preCICE documentation repository.
-Preliminary evaluation shows that semantic search over the documentation index returns relevant
-sections for a sampled set of 20 test queries.
-Full forum indexing and hybrid retrieval are under active development.
+The full seven-category pipeline, its GitHub Release publication step, and the local
+download-and-cache path on the server side have all been implemented and exercised against the
+live preCICE documentation, forum, and issue tracker.
+Preliminary evaluation shows that semantic search over the documentation category returns
+relevant sections for a sampled set of 20 test queries, as reported in
+\cref{sec:evaluation:results}.
+A systematic comparison between the lexical and semantic retrieval paths, across multiple
+language models and question-difficulty levels, is one of the central axes of the evaluation
+described in \cref{sec:evaluation}.
 
 
 % ----------------------------------------------------------------
 \section{Integration with the MCP Server}\label{sec:context-retrieval:integration}
 % ----------------------------------------------------------------
 
-The retrieval component is exposed to the \gls{llm} through two mechanisms.
+The retrieval component is exposed to the language model as the knowledge tool group already
+summarized in \cref{sec:mcp-server:knowledge-tools}: \texttt{kb\_query\_precice} and
+\texttt{kb\_query\_precice\_live} for semantic search, \texttt{kb\_query\_precice\_lexical}
+for keyword search, and \texttt{kb\_precice\_status} for freshness inspection.
 
-\paragraph{As an MCP tool.}
-A \texttt{search\_knowledge\_base} \gls{mcp} tool accepts a natural-language query and
-returns the top-$k$ retrieved chunks with source metadata.
-This allows the assistant to explicitly invoke retrieval when it determines that documentation
-or forum knowledge is needed.
+\paragraph{As an explicit tool call.}
+The assistant is expected to call \texttt{kb\_precice\_status} before querying a category for
+the first time in a session, and to choose between the cached and live semantic query tools
+based on the freshness result, rather than always paying the cost of a refresh.
+This two-step pattern keeps the common case, a fresh, already-cached category, fast, while still
+allowing correctness to be recovered when a category is stale.
 
-\paragraph{As a system prompt component.}
-For session initialization, the assistant can invoke the retrieval tool with a query derived from
-the project summary to pre-populate its context with relevant documentation before the user's
-first query.
-This proactive retrieval strategy reduces the likelihood of generic responses early in a session.
+\paragraph{As a session-initialization step.}
+For session initialization, the assistant can invoke a knowledge-base tool with a query derived
+from the project summary produced by the project tools, pre-populating its context with
+relevant documentation before the user's first question.
+This proactive retrieval strategy reduces the likelihood of generic responses early in a
+session, particularly for a project the assistant has not seen before.
 
 
 %%% ===============================================================
-\chapter{Alternative Approach: Claude Code Context Files}\label{sec:claudecode-approach}
+\chapter{Alternative Approach: A LangGraph Agent}\label{sec:claudecode-approach}
 %%% ===============================================================
 
-This chapter describes the alternative prototype approach based on Claude Code and
-\texttt{CLAUDE.md} context files, which provides a contrasting implementation for RQ3.
-\Cref{sec:claudecode-approach:overview} gives an overview.
-\Cref{sec:claudecode-approach:design} describes the context file design.
-\Cref{sec:claudecode-approach:comparison} compares the two approaches qualitatively.
+This chapter describes the second prototype, a self-contained agentic client built with
+LangGraph, which provides a contrasting implementation for RQ3.
+\Cref{sec:claudecode-approach:overview} gives an overview and motivates the design choice.
+\Cref{sec:claudecode-approach:design} describes the agent architecture and its tool set.
+\Cref{sec:claudecode-approach:comparison} compares the two prototypes qualitatively.
 
 
 % ----------------------------------------------------------------
 \section{Overview}\label{sec:claudecode-approach:overview}
 % ----------------------------------------------------------------
 
-Claude Code \cite{anthropic2024claudecode} is a command-line agent that operates within a
-software project directory and can read files, execute shell commands, and apply code edits.
-It reads \texttt{CLAUDE.md} files placed in the project root to obtain project-specific
-instructions, context, and conventions.
+Where the \gls{mcp} server described in \cref{sec:mcp-server} exposes tools over a protocol for
+an external host application to drive, the second prototype takes the complementary approach of
+building that host application itself.
+It is a local, browser-based chat assistant \cite{dange2026preciceailang}, referred to here as
+the LangGraph agent, that runs entirely on the user's machine: a lightweight web server opens a
+chat interface, the user selects a working directory for the session, and a
+LangGraph-orchestrated agent then reads project files, searches preCICE knowledge, and
+validates configuration files within that
+directory using the ReAct-style tool-calling loop introduced in
+\cref{sec:background:agents}.
 
-The Claude Code approach for preCICE AI involves providing a standardized \texttt{CLAUDE.md}
-template that instructs Claude Code about the preCICE project structure, the meaning of the
-configuration file, common error patterns, and available \gls{cli} commands.
-When the user invokes Claude Code within a preCICE project directory, the agent reads the
-configuration file and log files directly from the file system and answers queries based on
-their contents augmented by the context provided in \texttt{CLAUDE.md}.
+The distinction between the two prototypes is one of exposure rather than of the underlying
+capability: an \gls{mcp} server offers tools over a standardized protocol for any conforming
+client to consume, while an agent framework such as LangGraph supplies the tools together with
+a language model and a control loop, all running inside a single process that a project builds
+and controls end to end.
+The two are not mutually exclusive.
+The LangGraph agent both defines several tools of its own and launches the preCICE \gls{mcp}
+server described in \cref{sec:mcp-server} as a subprocess, calling its tools over the same
+stdio \gls{json}-\gls{rpc} transport that any other \gls{mcp} client would use, so that the
+knowledge-base search, project inspection, and \gls{cli}-backed capabilities of the server are
+available inside the agent without being reimplemented.
 
 
 % ----------------------------------------------------------------
-\section{Context File Design}\label{sec:claudecode-approach:design}
+\section{Agent Architecture and Tool Set}\label{sec:claudecode-approach:design}
 % ----------------------------------------------------------------
 
-The \texttt{CLAUDE.md} template for preCICE projects is structured as follows:
+\Cref{fig:langgraph-architecture} illustrates the overall architecture.
+A FastAPI application serves the chat interface and streams responses to the browser over
+server-sent events.
+Each incoming message re-enters a LangGraph \texttt{StateGraph} at a single \emph{agent} node,
+which builds a system prompt describing the assistant's role, the session's working directory,
+and the local sandboxing rules, and then invokes the language model with the full set of bound
+tools.
+If the model's response contains tool calls, control passes along a conditional edge to a
+\emph{tools} node, which executes each call and appends its result to the conversation before
+control returns to the agent node; if the response contains no tool calls, the graph terminates
+and the final answer is streamed back to the browser.
+This loop is the same two-node ReAct instantiation introduced in \cref{sec:background:agents},
+with the routing decision after every agent invocation reduced to a single conditional edge.
 
-\begin{enumerate}
-  \item \emph{Project type declaration:} Identifies the project as a preCICE simulation and
-        specifies the location of the configuration file.
-  \item \emph{preCICE concepts glossary:} Provides concise definitions of key preCICE terms
-        (participant, mesh, data, coupling scheme, convergence measure).
-  \item \emph{Configuration file guide:} Describes the structure of \texttt{precice-config.xml}
-        and the most common configuration patterns, with annotated examples.
-  \item \emph{CLI reference:} Lists available preCICE \gls{cli} commands and their expected
-        outputs.
-  \item \emph{Log file guide:} Describes the naming conventions and formats of preCICE log
-        files.
-  \item \emph{Common errors and solutions:} A curated list of frequently encountered error
-        messages and their typical causes, derived from the Discourse forum.
-\end{enumerate}
+\begin{figure}[htbp]
+  \centering
+  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{4cm}%
+  \textit{[Architecture diagram: browser chat UI connected over SSE to a FastAPI server. The
+  server holds per-session state (working directory, message history) and forwards each turn
+  into a LangGraph StateGraph. The graph has an agent node (builds system prompt, calls the
+  LLM with bound tools) and a tools node (a ToolNode executing whichever of the 7 native tools
+  -- search\_precice\_docs, list/read/write\_project\_file, validate\_precice\_config,
+  search\_forum\_live, read\_attached\_file -- the model requested), connected by a conditional
+  edge (tool\_calls present to tools, otherwise to END) and a fixed edge from tools back to
+  agent. search\_precice\_docs is served by a separate, locally hosted ChromaDB vector store
+  populated by an hourly ingestion job that scrapes preCICE documentation pages and Discourse
+  forum topics. The file tools are sandboxed to the session's chosen working directory. A
+  dashed arrow shows the same process also spawning the preCICE AI MCP server (Chapter 4) as a
+  stdio subprocess and calling its 26 tools the same way it calls its own 7.]}%
+  \vspace{4cm}}}
+  \caption{Architecture of the LangGraph prototype. The browser communicates with a FastAPI
+           server over server-sent events; each chat turn runs through a LangGraph
+           \texttt{StateGraph} that alternates between an agent node and a tools node until the
+           model returns a final answer. Tools are drawn both from a native tool set and,
+           through a subprocess connection, from the preCICE \gls{mcp} server described in
+           \cref{sec:mcp-server}.}
+  \label{fig:langgraph-architecture}
+\end{figure}
 
-This static context file approach requires no server infrastructure and is immediately usable
-by anyone with Claude Code installed.
-However, it does not support dynamic retrieval of documentation or forum content, and the
-quality of assistance is bounded by the completeness and currency of the \texttt{CLAUDE.md}
-template.
+\paragraph{Native tools.}
+Seven tools are implemented directly in this prototype and bound to the model alongside
+whichever tools the connected \gls{mcp} server exposes:
+
+\begin{description}[font=\ttfamily]
+  \item[search\_precice\_docs] Performs a retrieval query against a locally hosted vector store
+        populated by this prototype's own ingestion pipeline, described below.
+  \item[list\_project\_files] Returns a tree listing of the session's working directory.
+  \item[read\_project\_file] Reads a file from within the working directory, truncating large
+        files and rejecting binary content.
+  \item[write\_project\_file] Creates or overwrites a file within the working directory,
+        creating any missing parent directories.
+  \item[validate\_precice\_config] Runs the configuration-checking subcommand of the preCICE
+        \gls{cli} against a file within the working directory.
+  \item[search\_forum\_live] Performs a live query against the Discourse forum's search
+        \gls{api}, bypassing the local index for content that may not yet be indexed.
+  \item[read\_attached\_file] Reads a file the user has attached to the current chat session.
+\end{description}
+
+Every file-scoped tool applies the same boundary check: a requested path is resolved against
+the session's working directory, and the call is refused if the resolved path does not lie
+within it.
+The working directory itself can only be changed through a dedicated session endpoint, not by
+the language model during a conversation, which keeps the sandbox boundary outside the model's
+own control.
+Every tool returns a plain string and never raises an exception, so that a single failing tool
+call cannot terminate the surrounding response stream.
+
+\paragraph{Independent retrieval pipeline.}
+Unlike the \gls{mcp} server's pre-built, release-distributed knowledge base described in
+\cref{sec:context-retrieval}, this prototype ingests and indexes content itself, at startup and
+on an hourly schedule thereafter: a fixed set of preCICE documentation pages and the most
+active Discourse forum topics are scraped, stripped of markup, split into overlapping chunks,
+and embedded into a locally hosted vector store.
+Re-ingesting a source overwrites its previous chunks rather than duplicating them, keeping the
+index consistent across repeated runs.
+This self-refreshing design trades the reproducibility and offline distributability of the
+\gls{mcp} server's pre-built knowledge base for currency: the LangGraph agent's index is at most
+an hour out of date with respect to its sources, whereas the \gls{mcp} server's knowledge base
+is only as current as its most recent published release, refreshed on demand through
+\texttt{kb\_query\_precice\_live}.
+The existence of two independently implemented retrieval pipelines over overlapping source
+material is deliberately exploited in \cref{sec:evaluation} as a point of comparison, alongside
+the lexical-versus-semantic comparison internal to the \gls{mcp} server's own knowledge base.
+
+\paragraph{Session model.}
+State is held entirely in memory: a session is created with an identifier, associated with a
+working directory and a capped message history, and discarded when the process restarts.
+No conversation, attachment, or credential is written to disk or to a database, which keeps the
+deployment footprint minimal but means that closing the assistant loses the session, a
+trade-off consistent with the prototype's role as a local development aid rather than a
+persistent service.
 
 
 % ----------------------------------------------------------------
@@ -1402,35 +1782,44 @@ template.
 % ----------------------------------------------------------------
 
 \Cref{tab:approach-comparison} summarizes the qualitative differences between the two
-approaches across the dimensions relevant to the evaluation.
+prototypes across the dimensions relevant to the evaluation.
 
 \begin{table}[htbp]
-  \caption{Qualitative comparison of the \gls{mcp} server approach and the Claude Code
-           context-file approach. Full quantitative comparison is deferred to
-           \cref{sec:evaluation}.}
+  \caption{Qualitative comparison of the \gls{mcp} server prototype and the LangGraph agent
+           prototype. Full quantitative comparison is deferred to \cref{sec:evaluation}.}
   \label{tab:approach-comparison}
   \centering
   \begin{tabular}{lll}
     \toprule
-    \textbf{Dimension}       & \textbf{MCP Server}           & \textbf{Claude Code / CLAUDE.md} \\
+    \textbf{Dimension}       & \textbf{MCP Server}              & \textbf{LangGraph Agent}          \\
     \midrule
-    Infrastructure required  & Python MCP server             & None (Claude Code only)          \\
-    Dynamic project access   & Yes (via tools)               & Yes (native file reading)        \\
-    Documentation retrieval  & Yes (via RAG tool)            & Static (in CLAUDE.md)            \\
-    Forum retrieval          & Yes (via RAG tool)            & Static (curated list)            \\
-    Extensibility            & High (new tool groups)        & Moderate (edit CLAUDE.md)        \\
-    Setup complexity         & Moderate                      & Low                              \\
-    Client compatibility     & Any MCP client                & Claude Code only                 \\
+    Infrastructure required  & \gls{mcp} client (Claude Code,   & Self-hosted FastAPI server and    \\
+                              & Codex, Cursor, etc.)             & browser \gls{ui}                  \\
+    Orchestration             & Delegated to the client          & Owned end to end (LangGraph)      \\
+    Dynamic project access   & Yes (via project tools)          & Yes (native file tools)           \\
+    Knowledge-base retrieval & Pre-built, release-distributed;  & Self-ingested, hourly-refreshed;  \\
+                              & lexical and semantic paths       & semantic only                     \\
+    Config validation        & Via \gls{cli}-backed tool        & Via native tool (same \gls{cli})  \\
+    Extensibility            & High (new tool groups, any       & Moderate (edit the native tool    \\
+                              & \gls{mcp} client)                 & module, or add an \gls{mcp} client) \\
+    Setup complexity          & Moderate                         & Higher (two repositories, a       \\
+                              &                                   & local \gls{ui} process)            \\
+    Client compatibility     & Any \gls{mcp}-compatible client   & Its own browser \gls{ui} only     \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The \gls{mcp} server approach offers greater extensibility and richer dynamic capabilities, at
-the cost of additional setup complexity.
-The Claude Code approach is immediately usable with minimal setup but is constrained by the
-static nature of the context file.
-The evaluation in \cref{sec:evaluation} will provide quantitative evidence on which approach
-better serves users on the defined task scenarios.
+The \gls{mcp} server prototype offers broad client compatibility and a reproducible,
+centrally published knowledge base, at the cost of depending on a third-party client
+application to supply the orchestration loop and the user interface.
+The LangGraph prototype owns its orchestration loop and interface outright, which allows it to
+stream intermediate tool calls into a purpose-built \gls{ui} and to keep its retrieval index
+continuously current, at the cost of a heavier local footprint and a knowledge base that is
+rebuilt independently rather than centrally distributed.
+Because the LangGraph prototype can itself consume the \gls{mcp} server as a subprocess, the two
+are not strictly exclusive alternatives in practice; they are evaluated separately in
+\cref{sec:evaluation} to isolate the effect of orchestration and retrieval design from the
+effect of simply having tool access at all.
 
 
 %%% ===============================================================
@@ -1449,22 +1838,25 @@ This chapter presents the evaluation of preCICE AI.
 \section{Objective (SM2)}\label{sec:evaluation:objective}
 % ----------------------------------------------------------------
 
-The evaluation aims to answer RQ3: how do the \gls{mcp}-based approach and the Claude Code
-approach compare in terms of usability, accuracy of responses, local integration, and
+The evaluation aims to answer RQ3: how does the \gls{mcp}-based prototype compare with the
+LangGraph agent prototype in terms of usability, accuracy of responses, local integration, and
 extensibility?
-In addition, functional validation of the \gls{mcp} tool suite addresses RQ1 and preliminary
-retrieval quality assessment addresses RQ2.
+In addition, functional validation of the \gls{mcp} tool suite addresses RQ1, and a structured
+comparison of retrieval configurations addresses RQ2.
 
-Concretely, we measure:
+Concretely, the evaluation measures:
 
 \begin{itemize}
   \item \emph{Task completion accuracy:} For each evaluation scenario, whether the assistant
         produces a correct and complete response without requiring user correction.
-  \item \emph{Response relevance:} Whether retrieved passages (for the \gls{mcp} approach)
-        are relevant to the query.
+  \item \emph{Retrieval-mode effect:} Whether lexical or semantic knowledge-base retrieval
+        yields more accurate answers, and whether this depends on question difficulty.
+  \item \emph{Model-capability effect:} Whether the accuracy gain from grounding through tools
+        and retrieval is stable across language models of different capability, or whether it is
+        concentrated in weaker models that benefit most from external grounding.
   \item \emph{Tool invocation correctness:} Whether the assistant selects and invokes the
         appropriate tools for each query type.
-  \item \emph{Setup time:} Time required to configure each approach for a new preCICE project.
+  \item \emph{Setup time:} Time required to configure each prototype for a new preCICE project.
 \end{itemize}
 
 
@@ -1473,7 +1865,7 @@ Concretely, we measure:
 % ----------------------------------------------------------------
 
 \paragraph{Evaluation scenarios.}
-We define five evaluation scenario categories, each consisting of multiple concrete tasks:
+Five evaluation scenario categories are defined, each consisting of multiple concrete tasks:
 
 \begin{enumerate}
   \item \emph{Project overview:} Tasks requiring the assistant to summarize the project
@@ -1489,56 +1881,123 @@ We define five evaluation scenario categories, each consisting of multiple concr
 \end{enumerate}
 
 \paragraph{Reference projects.}
-We use three reference preCICE projects of increasing complexity: the official
+Three reference preCICE projects of increasing complexity are used: the official
 \emph{perpendicular-flap} tutorial (\gls{fsi}, two participants), the
 \emph{flow-over-heated-plate} tutorial (\gls{cht}, two participants), and a custom
 three-participant configuration designed to exercise multi-coupling scenarios.
 
 \paragraph{Baseline.}
-The baseline is ungrounded \gls{llm} interaction: the same Claude model without any \gls{mcp}
-tools or context files, receiving only the user's natural-language query.
+The baseline is ungrounded \gls{llm} interaction: the same underlying model, presented with
+only the user's natural-language query and no access to project tools or to the knowledge base.
+
+\paragraph{Knowledge-base retrieval mode.}
+The knowledge-base-dependent scenarios (configuration authoring and conceptual questions, in
+particular) are run under both retrieval paths exposed by the \gls{mcp} server, described in
+\cref{sec:context-retrieval}: the lexical path (\texttt{kb\_query\_precice\_lexical}) and the
+semantic path (\texttt{kb\_query\_precice} / \texttt{kb\_query\_precice\_live}).
+Running every such scenario under both paths isolates the contribution of semantic similarity
+search from the contribution of tool access in general, since the lexical path already provides
+grounded retrieval without requiring an embedding \gls{api} call.
+
+\paragraph{Model capability tiers.}
+Because the value of grounding a language model in external tools and retrieved context may
+depend on how capable the underlying model already is, every scenario is additionally run
+against three language models chosen to span a capability range rather than a single fixed
+model: a small or freely available model with comparatively limited instruction-following and
+tool-use reliability; a mid-tier general-purpose model representative of the default currently
+used by the LangGraph prototype; and a frontier-class reasoning model representative of the
+strongest models available at evaluation time.
+This tiering is designed to test two related hypotheses: that grounding narrows the accuracy
+gap for weaker models most, and that grounding continues to add measurable value even for a
+model that is already strong without it.
+The exact model identifiers are selected at execution time, since the set of available models
+on the OpenRouter-compatible endpoints used by both prototypes changes over the timeframe of
+this thesis, and are reported alongside the results in \cref{sec:evaluation:results}.
+
+\paragraph{Question-difficulty tiers.}
+The evaluation question set is stratified into three difficulty tiers, each evaluated with a
+different assessment method appropriate to how well defined a correct answer is at that tier:
+
+\begin{itemize}
+  \item \emph{Easy:} Narrowly scoped, factual questions with a single well-defined correct
+        answer (e.g., naming a specific configuration attribute or coupling-scheme type).
+        These are assessed both qualitatively and quantitatively, the latter by computing the
+        cosine similarity between an embedding of the assistant's answer and an embedding of a
+        pre-written reference answer, so that many easy-tier responses can be scored
+        consistently without a human rater in the loop for every run.
+  \item \emph{Medium:} Questions that require combining more than one piece of project or
+        documentation context, such as explaining why a specific configuration choice is
+        appropriate for a given coupling scenario.
+        These are assessed manually and qualitatively only, since a single reference answer
+        would not capture the range of acceptable explanations.
+  \item \emph{Difficult:} Open-ended diagnostic or design questions with no single correct
+        answer, such as proposing how to resolve a divergence problem in an implicit coupling
+        scheme.
+        These are likewise assessed manually and qualitatively, following criteria adapted from
+        the faithfulness and answer-relevance dimensions proposed by \citeauthor{es2023ragas}
+        \cite{es2023ragas} for reference-free \gls{rag} evaluation.
+\end{itemize}
+
+The full evaluation therefore spans the product of two knowledge-base retrieval modes, three
+model-capability tiers, and three question-difficulty tiers, applied consistently across both
+prototypes and the ungrounded baseline.
 
 
 % ----------------------------------------------------------------
 \section{Execution (SM4)}\label{sec:evaluation:execution}
 % ----------------------------------------------------------------
 
-\emph{Note: This section will be completed when the context retrieval component and the full
-evaluation runs are finalized. The following describes the planned execution.}
+\emph{The following describes the planned execution; the evaluation runs themselves had not
+yet been carried out at the time of writing.}
 
-Each scenario task will be executed three times for each condition (\gls{mcp} server, Claude
-Code, baseline) to account for response variability.
-Responses will be assessed against reference answers prepared in advance.
-Assessment criteria are: (1) factual correctness, (2) completeness relative to the task
-specification, and (3) absence of hallucinated preCICE concepts or configuration elements.
-Two independent assessors will rate each response; inter-rater agreement will be measured
-using Cohen's $\kappa$.
+Each scenario task is executed once per combination of prototype (or baseline), knowledge-base
+retrieval mode where applicable, and model tier, for every difficulty tier.
+Easy-tier responses are scored automatically via cosine similarity against a pre-written
+reference answer, using the same embedding model as the semantic retrieval path so that
+similarity scores remain comparable to the retrieval-quality figures reported in
+\cref{sec:evaluation:results}.
+Medium- and difficult-tier responses are rated manually by the author against a short
+qualitative rubric covering factual correctness, completeness relative to the task
+specification, and absence of hallucinated preCICE concepts or configuration elements, in the
+spirit of the function-calling and agentic-task evaluation methodologies of
+\citeauthor{patil2025bfcl} \cite{patil2025bfcl} and \citeauthor{wang2025mcpbench}
+\cite{wang2025mcpbench}, adapted here from tool-call correctness to end-to-end answer quality.
+Tool-invocation traces, logged by both prototypes as described in
+\cref{sec:mcp-server:implementation,sec:claudecode-approach:design}, are additionally inspected
+to assess whether the assistant selected an appropriate tool sequence for each task, independent
+of whether the final natural-language answer happened to be correct.
 
 
 % ----------------------------------------------------------------
 \section{Results (SM5)}\label{sec:evaluation:results}
 % ----------------------------------------------------------------
 
-\emph{Note: Full quantitative results will be reported here upon completion of the evaluation
-runs. The following reports results available at the time of writing.}
+\emph{Full quantitative results across the knowledge-base, model, and difficulty grid described
+in \cref{sec:evaluation:setup} will be reported here upon completion of the evaluation runs.
+The following reports results available at the time of writing.}
 
 \paragraph{Functional testing of MCP tools.}
-All implemented \gls{mcp} tools (three project tools, five configuration tools, four log tools,
-and the retrieval tool) were tested against the three reference projects.
+All 26 implemented \gls{mcp} tools, across the project, configuration, log, knowledge-base, and
+\gls{cli}-wrapper groups described in \cref{sec:mcp-server}, were tested against the three
+reference projects.
 All tools returned correct results for well-formed inputs.
 Error handling was verified by providing invalid file paths, malformed \gls{xml}, and
-out-of-range parameters; in all cases the server returned a structured error object without
-crashing.
+out-of-range parameters; in all cases the server returned a human-readable error message
+without crashing, and the \gls{cli}-backed tools correctly reported an installation hint when
+\texttt{precice-cli} was not available on the system path.
 
 \paragraph{Preliminary retrieval quality.}
 A preliminary retrieval evaluation was conducted on a set of 20 queries sampled from the
-Discourse forum.
+Discourse forum, using the semantic retrieval path.
 For each query, the top-5 retrieved documentation chunks were assessed for relevance.
 Results are shown in \cref{tab:retrieval-prelim}.
+This preliminary result predates, and motivates, the full lexical-versus-semantic comparison
+described in \cref{sec:evaluation:setup}.
 
 \begin{table}[htbp]
-  \caption{Preliminary retrieval quality for 20 sampled queries. Precision@5 is the fraction
-           of the top-5 retrieved chunks rated as relevant by a human assessor.}
+  \caption{Preliminary retrieval quality for 20 sampled queries against the semantic retrieval
+           path. Precision@5 is the fraction of the top-5 retrieved chunks rated as relevant by
+           a human assessor.}
   \label{tab:retrieval-prelim}
   \centering
   \begin{tabular}{lcc}
@@ -1555,23 +2014,50 @@ Results are shown in \cref{tab:retrieval-prelim}.
   \end{tabular}
 \end{table}
 
-% \begin{figure}[htbp]
-%   \centering
-%   \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{3cm}%
-%   \textit{[Planned figure: bar chart showing task completion accuracy (correct / partial / incorrect)
-%   per scenario category and per condition (MCP server, Claude Code, Baseline).
-%   To be completed when evaluation runs are finished.]}%
-%   \vspace{3cm}}}
-%   \caption{Task completion accuracy per scenario category and condition.
-%            To be completed upon finalization of evaluation runs.}
-%   \label{fig:precice-ai_issue_question}
-% \end{figure}
-
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=1\linewidth]{precice-ai_issue_question}
-  \caption{MCP server in action.}
+  \caption{MCP server in action, answering a configuration question inside an \gls{mcp} client.}
   \label{fig:precice-ai_issue_question.png}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{5cm}%
+  \textit{[Screenshot placeholder: Claude Code session invoking the preCICE AI MCP server on a
+  representative configuration-authoring or log-analysis task, showing the tool-call sequence
+  and the resulting natural-language answer.]}%
+  \vspace{5cm}}}
+  \caption{Representative Claude Code session using the preCICE \gls{mcp} server on an
+           evaluation scenario.}
+  \label{fig:claude-code-screenshot}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{5cm}%
+  \textit{[Screenshot placeholder: Codex session invoking the preCICE AI MCP server on the same
+  representative task as \cref{fig:claude-code-screenshot}, for direct visual comparison across
+  MCP clients.]}%
+  \vspace{5cm}}}
+  \caption{Representative Codex session using the preCICE \gls{mcp} server on the same
+           evaluation scenario.}
+  \label{fig:codex-screenshot}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{4cm}%
+  \textit{[Planned figure: grouped bar chart showing task completion accuracy (cosine
+  similarity for easy-tier questions; qualitative rating converted to a numeric scale for
+  medium- and difficult-tier questions) per scenario category, broken down by prototype
+  (MCP server, LangGraph agent, baseline), knowledge-base retrieval mode (lexical, semantic),
+  and model tier (small, mid-tier, frontier). To be completed when evaluation runs are
+  finished.]}%
+  \vspace{4cm}}}
+  \caption{Planned task completion accuracy across prototypes, retrieval modes, model tiers,
+           and difficulty tiers.}
+  \label{fig:accuracy-grid}
 \end{figure}
 
 
@@ -1579,28 +2065,34 @@ Results are shown in \cref{tab:retrieval-prelim}.
 \section{Discussion (SM6)}\label{sec:evaluation:discussion}
 % ----------------------------------------------------------------
 
-\emph{Note: Full interpretation will follow the completion of evaluation runs.}
+\emph{Full interpretation will follow the completion of the evaluation runs described in
+\cref{sec:evaluation:setup,sec:evaluation:execution}.}
 
 The preliminary retrieval results (Precision@5 of 0.82) indicate that semantic search over the
-preCICE documentation index is sufficiently accurate to provide useful grounding for the
+preCICE documentation category is already accurate enough to provide useful grounding for the
 majority of user queries.
-The lower precision for coupling scheme tuning queries (0.72) likely reflects the fact that
-tuning advice is distributed across multiple documentation sections and forum threads, making
-it harder to retrieve in a single top-5 set; hybrid retrieval combining dense and sparse search
-is expected to improve performance on this category.
+The lower precision observed for coupling-scheme tuning queries (0.72) likely reflects the fact
+that tuning advice is distributed across multiple documentation sections and forum threads,
+making it harder to retrieve in a single top-5 set; the planned lexical-versus-semantic
+comparison, and the forum and issue-tracker categories that the preliminary evaluation did not
+yet cover, are both expected to shed further light on this category specifically.
 
 Functional testing confirms that the \gls{mcp} server is robust to malformed inputs and handles
-error cases gracefully.
-The \gls{json} tool output formats were found to be well-suited for \gls{llm} consumption,
-with the structured output enabling the model to selectively reference specific fields in its
-responses rather than summarizing entire file contents.
+error cases gracefully across all five tool groups, including the \gls{cli}-wrapper group added
+after the initial three-group design.
+The plain-text tool output format was found to be well-suited for \gls{llm} consumption, with
+concise, purpose-built summaries enabling the model to reference specific facts in its responses
+rather than restating entire file contents.
 
-The qualitative comparison in \cref{tab:approach-comparison} suggests that the \gls{mcp}
-server approach is more powerful but requires more setup effort.
-For users who already have Claude Code installed, the context-file approach offers an
-immediately accessible path to improved assistance.
-The full evaluation will provide quantitative evidence on the performance difference between
-the two approaches across the defined scenario categories.
+The qualitative comparison in \cref{tab:approach-comparison} suggests that the \gls{mcp} server
+prototype offers broader client compatibility and a more reproducible knowledge base, while the
+LangGraph prototype offers a continuously refreshed retrieval index and full ownership of the
+orchestration loop, at the cost of a heavier local footprint.
+The full evaluation, once executed across the knowledge-base, model-tier, and difficulty grid
+defined in \cref{sec:evaluation:setup}, is expected to clarify two open questions in particular:
+whether the accuracy advantage of grounding is concentrated in the weaker model tier, as
+hypothesized, and whether semantic retrieval meaningfully outperforms the network-independent
+lexical path once evaluated beyond the single preliminary query sample reported above.
 
 
 %%% ===============================================================
@@ -1620,57 +2112,91 @@ The completed contributions of this work are:
 \begin{enumerate}
   \item A systematic analysis of the preCICE user workflow identifying the information sources
         and operations required by an intelligent assistant (\cref{sec:problem-exposition}).
-  \item The design and implementation of a preCICE \gls{mcp} server with three tool groups
-        (project, configuration, log) covering the core phases of the simulation workflow
+  \item The design and implementation of a preCICE \gls{mcp} server with five tool groups,
+        26 tools in total, covering project discovery, configuration inspection, log analysis,
+        knowledge-base retrieval, and a wrapper around the official preCICE \gls{cli}
         (\cref{sec:mcp-server}).
-  \item The design of a retrieval pipeline for preCICE documentation and forum knowledge,
-        with preliminary validation of retrieval quality (\cref{sec:context-retrieval}).
-  \item A documented alternative prototype based on Claude Code context files, providing a
-        low-infrastructure complementary approach (\cref{sec:claudecode-approach}).
+  \item The design and implementation of a dual lexical-and-semantic retrieval pipeline over
+        seven categories of preCICE knowledge, including documentation, tutorials, the
+        Discourse forum, and the GitHub issue tracker, published through versioned release
+        assets and validated by a preliminary retrieval-quality assessment
+        (\cref{sec:context-retrieval}).
+  \item A second, architecturally independent prototype built with LangGraph that reuses the
+        same class of tools inside a self-contained ReAct agent and its own browser interface,
+        and that can in turn drive the \gls{mcp} server as a subprocess
+        (\cref{sec:claudecode-approach}).
+  \item An evaluation design spanning both prototypes, two knowledge-base retrieval modes,
+        three language-model capability tiers, and three question-difficulty tiers, combining
+        automated similarity-based scoring with manual qualitative assessment
+        (\cref{sec:evaluation}).
 \end{enumerate}
 
 \paragraph{Answers to research questions.}
 RQ1 (Tool integration) has been addressed by the implemented \gls{mcp} server, which
-demonstrates that the three identified tool groups are sufficient to support project overview,
-configuration inspection, and log analysis tasks.
-RQ2 (Context retrieval) is partially addressed: the documentation retrieval pipeline shows
-promising preliminary quality, while forum retrieval and hybrid search remain as ongoing work.
-RQ3 (Prototype comparison) will be fully addressed by the evaluation runs planned for the
-next phase of the project.
+demonstrates that the five identified tool groups are sufficient to support project overview,
+configuration inspection, log analysis, knowledge retrieval, and \gls{cli}-backed validation
+tasks across a set of representative preCICE projects.
+RQ2 (Context retrieval) is substantially addressed: both the lexical and semantic retrieval
+paths have been implemented over the full seven-category knowledge base, and a preliminary
+quality assessment of the semantic path shows encouraging results, while the systematic
+comparison between the two paths across model tiers and difficulty levels remains to be
+executed.
+RQ3 (Prototype comparison) will be fully addressed by the evaluation runs described in
+\cref{sec:evaluation}, which are planned but not yet executed at the time of writing.
 
 \paragraph{Limitations.}
-The current prototype has several limitations.
-First, the retrieval component does not yet cover the Discourse forum, which represents a
-significant source of practical debugging knowledge.
-Second, the evaluation has not yet been completed, so the quantitative claim that preCICE AI
-improves task completion over baseline remains to be validated.
-Third, the \gls{mcp} server currently operates in a read-only mode and does not support
-configuration editing---a capability that would significantly extend its utility for phase-2
-workflow support.
+The current prototypes have several limitations.
+First, the full evaluation across knowledge-base modes, model tiers, and difficulty levels has
+not yet been executed, so the quantitative claim that preCICE AI improves task completion over
+an ungrounded baseline, and the claim that grounding matters more for weaker models, both remain
+to be validated rather than assumed.
+Second, the \gls{mcp} server's configuration tools remain deliberately conservative: they
+inspect, summarize, and back up the configuration file, but do not yet apply edits directly,
+leaving configuration-authoring tasks as a suggest-and-copy workflow for the user rather than a
+suggest-and-apply one.
+Third, the two prototypes' retrieval pipelines have not been benchmarked against each other
+directly, only against a shared baseline, which limits how confidently the qualitative
+comparison in \cref{tab:approach-comparison} can be read as a ranking rather than as a
+description of two different design points.
+Fourth, the LangGraph prototype's own knowledge-base ingestion pipeline still depends on
+components, such as a local vector-database client and embedding library, that were introduced
+during an earlier design iteration and are no longer exercised by every code path, which is a
+maintainability concern more than a correctness one but is worth resolving before further
+extension.
 
 \paragraph{Future work.}
 Several directions for future work are motivated by the analysis and preliminary results:
 
 \begin{itemize}
   \item \emph{Write-capable configuration tools:} Extending the configuration tool group with
-        write operations would enable the assistant to apply suggested changes directly rather
-        than presenting them as text for the user to copy.
-  \item \emph{Forum retrieval and hybrid search:} Completing the forum indexing pipeline and
-        implementing \gls{bm25} hybrid retrieval is expected to improve response quality for
-        debugging and tuning queries.
+        carefully scoped write operations, building on the existing backup tool, would enable
+        the assistant to apply suggested changes directly rather than presenting them as text
+        for the user to copy.
+  \item \emph{Direct retrieval-pipeline comparison:} Running the same question set through both
+        prototypes' retrieval pipelines under matched conditions would clarify whether a
+        pre-built, periodically republished knowledge base or a continuously self-refreshing
+        one is the better default for a locally run assistant.
   \item \emph{Simulation execution tools:} A tool that can launch and monitor a preCICE
-        simulation would support the full phase-3 workflow.
+        simulation would support the full phase-3 workflow, which today still requires the user
+        to start the simulation outside the assistant.
   \item \emph{Broader evaluation:} A user study with preCICE practitioners would provide
-        ecologically valid evidence of the assistant's utility beyond the controlled scenario
-        evaluation planned in this thesis.
+        ecologically valid evidence of the assistant's utility beyond the controlled,
+        scenario-based evaluation designed in this thesis.
+  \item \emph{Security hardening beyond the current allowlist:} As the tool surface grows,
+        periodically revisiting the command-execution allowlist and blocklist against the kind
+        of \gls{mcp}-specific threat models identified by \citeauthor{hou2025mcplandscape}
+        \cite{hou2025mcplandscape} and the benchmarked attack patterns of
+        \citeauthor{wang2025mcptox} \cite{wang2025mcptox} would help keep the safety posture
+        proportionate to the capability being added.
   \item \emph{Generalization to other coupling libraries:} The \gls{mcp} server architecture
         and retrieval pipeline design are not specific to preCICE and could be adapted to other
         scientific simulation frameworks with relatively modest effort.
 \end{itemize}
 
 preCICE AI demonstrates that standards-based tool integration via \gls{mcp}, combined with
-domain-specific \gls{rag}, is a viable and effective architecture for making complex scientific
-simulation software more accessible to users of all experience levels.
+domain-specific \gls{rag} and, where useful, a self-contained agent runtime built directly on
+the same tools, is a viable architecture for making complex scientific simulation software more
+accessible to users of all experience levels.
 
 
 %%% ===============================================================
@@ -1691,49 +2217,131 @@ All links were last followed on May 20, 2026.
 \chapter{MCP Server Tool Reference}\label{sec:appendix-tools}
 %%% ===============================================================
 
-This appendix provides a complete reference for all tools implemented in the preCICE \gls{mcp}
-server.
+This appendix provides a complete reference for all 26 tools implemented in the preCICE
+\gls{mcp} server, grouped as in \cref{sec:mcp-server}.
 
 \section{Project Tools}
 
 \begin{description}[font=\ttfamily]
-  \item[list\_project\_files]\mbox{}\\
-        Lists files in the preCICE project directory.\\
-        \textit{Input:} \texttt{path} (string): project root; \texttt{depth} (integer, default 3):
-        traversal depth; \texttt{filter} (string, optional): extension filter.\\
-        \textit{Output:} \gls{json} array of file objects with \texttt{path}, \texttt{size},
-        \texttt{modified}.
+  \item[list\_precice\_projects]\mbox{}\\
+        Lists the subdirectories of the configured projects root as candidate preCICE
+        projects.\\
+        \textit{Input:} none.\\
+        \textit{Output:} plain-text list of project names.
 
-  \item[read\_file]\mbox{}\\
-        Reads a file within the project directory.\\
-        \textit{Input:} \texttt{path} (string): file path relative to project root.\\
-        \textit{Output:} \gls{json} object with \texttt{content} (string) and \texttt{encoding}.
+  \item[inspect\_project\_structure]\mbox{}\\
+        Returns a depth-limited directory tree for a named project.\\
+        \textit{Input:} \texttt{project\_name} (string); \texttt{max\_depth} (integer,
+        default 3).\\
+        \textit{Output:} plain-text directory tree.
 
-  \item[get\_project\_summary]\mbox{}\\
-        Produces a high-level summary of the project structure.\\
-        \textit{Input:} \texttt{path} (string): project root directory.\\
-        \textit{Output:} \gls{json} object with \texttt{config\_file}, \texttt{solver\_dirs},
-        \texttt{run\_scripts}, \texttt{log\_files}.
+  \item[find\_precice\_config]\mbox{}\\
+        Locates the \texttt{precice-config.xml} file within a named project.\\
+        \textit{Input:} \texttt{project\_name} (string).\\
+        \textit{Output:} the resolved configuration file path, or a not-found message.
+
+  \item[run\_command\_in\_project]\mbox{}\\
+        Executes an allowlisted, read-oriented shell command with a named project as its
+        working directory.\\
+        \textit{Input:} \texttt{project\_name} (string); \texttt{command} (string).\\
+        \textit{Output:} captured standard output, standard error, and return code, or a
+        refusal message if the command fails the safety check.
 \end{description}
 
 \section{Configuration Tools}
 
 \begin{description}[font=\ttfamily]
-  \item[get\_participants]\mbox{}\\ Extracts participant declarations from the configuration file.
-  \item[get\_coupling\_scheme]\mbox{}\\ Returns the coupling scheme configuration.
-  \item[get\_data\_mappings]\mbox{}\\ Returns all data mapping declarations.
-  \item[validate\_config]\mbox{}\\ Validates the configuration file against the preCICE \gls{xml} schema.
-  \item[get\_config\_summary]\mbox{}\\ Returns a concise summary of the configuration.
+  \item[inspect\_precice\_config]\mbox{}\\
+        Reads and returns the structured contents of a project's configuration file.\\
+        \textit{Input:} \texttt{project\_name} (string).\\
+        \textit{Output:} plain-text structured description of participants, meshes, data
+        fields, and the coupling scheme.
+
+  \item[summarize\_precice\_config]\mbox{}\\
+        Produces a concise, human-readable summary of the configuration file.\\
+        \textit{Input:} \texttt{project\_name} (string).\\
+        \textit{Output:} short plain-text summary.
+
+  \item[backup\_precice\_config]\mbox{}\\
+        Writes a timestamped copy of the current configuration file.\\
+        \textit{Input:} \texttt{project\_name} (string).\\
+        \textit{Output:} path to the created backup file.
 \end{description}
 
 \section{Log Tools}
 
 \begin{description}[font=\ttfamily]
-  \item[list\_log\_files]\mbox{}\\ Lists all preCICE log files in the project directory.
-  \item[get\_convergence\_summary]\mbox{}\\ Returns convergence statistics from an iterations log file.
-  \item[extract\_errors]\mbox{}\\ Extracts error and warning messages from all log files.
-  \item[get\_timing\_summary]\mbox{}\\ Returns a timing breakdown from a timing log file.
+  \item[list\_project\_logs]\mbox{}\\
+        Scans a named project for preCICE log files.\\
+        \textit{Input:} \texttt{project\_name} (string).\\
+        \textit{Output:} plain-text inventory of discovered log files.
+
+  \item[read\_project\_logs]\mbox{}\\
+        Reads the content of every discovered log file, truncated per file.\\
+        \textit{Input:} \texttt{project\_name} (string); \texttt{max\_chars\_per\_file}
+        (integer, default 5000).\\
+        \textit{Output:} concatenated, truncated log contents.
+
+  \item[read\_latest\_log]\mbox{}\\
+        Reads the tail of the most recently modified log file.\\
+        \textit{Input:} \texttt{project\_name} (string); \texttt{lines} (integer, default 80).\\
+        \textit{Output:} the requested number of trailing lines.
+
+  \item[analyze\_precice\_logs]\mbox{}\\
+        Scans all log files for heuristic error, warning, and convergence indicator terms.\\
+        \textit{Input:} \texttt{project\_name} (string).\\
+        \textit{Output:} matched lines together with trailing log context.
 \end{description}
+
+\section{Knowledge Base Tools}
+
+\begin{description}[font=\ttfamily]
+  \item[kb\_precice\_status]\mbox{}\\
+        Reports, per category, whether local knowledge-base assets are present and fresh.\\
+        \textit{Input:} none.\\
+        \textit{Output:} plain-text freshness report across all seven categories.
+
+  \item[kb\_query\_precice]\mbox{}\\
+        Answers a natural-language query against the locally cached semantic index for a given
+        category.\\
+        \textit{Input:} \texttt{query} (string); \texttt{category} (string).\\
+        \textit{Output:} top-$k$ retrieved chunks with source metadata.
+
+  \item[kb\_query\_precice\_live]\mbox{}\\
+        As \texttt{kb\_query\_precice}, refreshing missing or stale category assets first.\\
+        \textit{Input:} \texttt{query} (string); \texttt{category} (string).\\
+        \textit{Output:} top-$k$ retrieved chunks with source metadata.
+
+  \item[kb\_query\_precice\_lexical]\mbox{}\\
+        Performs keyword-based retrieval against the lexical index; makes no external call.\\
+        \textit{Input:} \texttt{query} (string); \texttt{category} (string, optional).\\
+        \textit{Output:} top-$k$ retrieved chunks with source metadata.
+
+  \item[kb\_ingest\_precice\_data]\mbox{}\\
+        Triggers a local rebuild or refresh of knowledge-base assets.\\
+        \textit{Input:} \texttt{category} (string, optional).\\
+        \textit{Output:} status report of the ingestion run.
+\end{description}
+
+\section{CLI-Backed Tools}
+
+\begin{description}[font=\ttfamily]
+  \item[precice\_version]\mbox{}\\ Reports the installed preCICE \gls{cli} version.
+  \item[precice\_config\_check]\mbox{}\\ Validates a configuration file via the reference
+        \gls{cli}.
+  \item[precice\_config\_visualize]\mbox{}\\ Produces a visual representation of the coupling
+        topology.
+  \item[precice\_config\_format]\mbox{}\\ Normalizes the formatting of a configuration file.
+  \item[precice\_config\_doc]\mbox{}\\ Looks up reference documentation for a configuration
+        element.
+  \item[precice\_init]\mbox{}\\ Validates a topology against a \gls{json} schema and scaffolds
+        a new project.
+  \item[precice\_profiling\_analyze]\mbox{}\\ Summarizes profiling output from a preCICE run.
+\end{description}
+
+Every tool in this group first checks for \texttt{precice-cli} on the system path and returns
+an installation hint instead of failing when it is absent, as described in
+\cref{sec:mcp-server:cli-tools}.
 
 
 %%% ===============================================================
