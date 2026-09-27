@@ -1,0 +1,30 @@
+# LaTeX build artifacts (regenerated locally and by Overleaf on every compile)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.glg
+*.glg-abr
+*.glo
+*.glo-abr
+*.gls
+*.gls-abr
+*.ist
+*.lof
+*.lol
+*.lot
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.thm
+*.toc
+*.upa
+*.upb
+*.fls
+*.fdb_latexmk
+*.xdy
+_minted/
+
+# Final PDF is a build product; Overleaf/local builds regenerate it
+main-english.pdf

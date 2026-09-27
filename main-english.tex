@@ -73,7 +73,7 @@
   ]
   \setsansfont[Scale=.9]{TeX Gyre Heros Regular}
   \ifwindows
-    \setmonofont[StylisticSet={1,3},Scale=.9]{Inconsolata}
+    \setmonofont[StylisticSet={1,3},Scale=.9]{Inconsolata N}
   \else
     \setmonofont[StylisticSet={1,3},Scale=.9]{Inconsolatazi4}
   \fi
@@ -1340,6 +1340,71 @@ A user who observes a simulation crash can simply ask \emph{``What went wrong?''
 the assistant to invoke this tool, receive the filtered log content, and present a
 natural-language explanation with references to the specific log entries.
 
+\Cref{lst:log-tool-example} shows an abridged, representative excerpt of an actual
+\texttt{analyze\_precice\_logs} invocation against a two-participant \gls{fsi} project.
+The tool scans every log file discovered in the project directory, including files that turn
+out to be unrelated to the simulation itself, and reports a per-file verdict together with a
+trailing excerpt.
+For the participant log files, the verdict correctly distinguishes a clean run
+(\texttt{precice-Fluid-iterations.log}) from a run that terminated with an unhandled exception
+(\texttt{fluid-run.log}) and from a run that surfaced both a warning and a failure keyword
+while still reporting convergence information (\texttt{solid-run.log}).
+In this example, the underlying cause, a call to \texttt{read\_data} outside the current
+coupling time window on the fluid participant, is visible directly in the reported Python
+traceback, allowing the assistant to point the user at the offending line without further
+tool calls.
+
+\begin{listing}[htbp]
+\begin{minted}[linenos=true,breaklines=true]{text}
+Tool call: analyze_precice_logs
+Input: { "project_name": "fsi-fluid-solid-mcp" }
+
+Output (abridged):
+
+--- Log file: generated/fluid-python/precice-Fluid-iterations.log ---
+No obvious errors or warnings found.
+
+--- Log file: generated/fluid-python/fluid-run.log ---
+Error detected in log.
+Failure keyword found.
+
+Last 30 lines:
+[Fluid]   0.9900      0.5000     -0.1874      0.002946
+Traceback (most recent call last):
+  File ".../test-projects/fsi-fluid-solid-mcp/generated/fluid-python/solver.py",
+       line 68, in <module>
+    disp = participant.read_data(MESH_NAME, READ_DATA, vertex_ids, dt)
+  File "cyprecice/cyprecice.pyx", line 928, in cyprecice.Participant.read_data
+RuntimeError: readData(...) cannot sample data outside of current time window.
+
+--- Log file: generated/solid-python/solid-run.log ---
+Warning detected in log.
+Coupling iterations detected.
+Convergence information found.
+Failure keyword found.
+
+Last 30 lines:
+[Solid]   0.9900     -0.1874    0.002946   -0.089764
+[Solid]   1.0000     -0.0628    0.002045   -0.090070
+[Solid] Done.
+\end{minted}
+\caption{Abridged output of \texttt{analyze\_precice\_logs} for a fluid-structure interaction
+         project with a fluid-side runtime error. The full, unabridged tool output additionally
+         lists every other log and text file discovered under each participant's generated
+         directory, most of which are unrelated to the simulation (for example, third-party
+         license files bundled with installed Python packages) and are reported as containing
+         no obvious errors.}
+\label{lst:log-tool-example}
+\end{listing}
+
+The example also illustrates a limitation of the current heuristic: because
+\texttt{analyze\_precice\_logs} scans every file under the project directory rather than only
+files that preCICE itself produced, its output can include a large number of irrelevant
+entries, such as license files bundled with a solver's Python virtual environment, alongside
+the small number of entries that are actually diagnostic.
+Restricting the scan to preCICE-specific log naming conventions is noted as a possible
+refinement in \cref{sec:conclusion}.
+
 
 % ----------------------------------------------------------------
 \section{Knowledge Base Tools}\label{sec:mcp-server:knowledge-tools}
@@ -2177,6 +2242,13 @@ Several directions for future work are motivated by the analysis and preliminary
   \item \emph{Simulation execution tools:} A tool that can launch and monitor a preCICE
         simulation would support the full phase-3 workflow, which today still requires the user
         to start the simulation outside the assistant.
+  \item \emph{Narrower log discovery:} As illustrated in \cref{sec:mcp-server:log-tools},
+        \texttt{analyze\_precice\_logs} currently scans every file under a participant's
+        generated directory, including files unrelated to preCICE itself, such as license
+        files bundled with a solver's Python virtual environment.
+        Restricting discovery to preCICE-specific log naming conventions and known solver
+        output locations would reduce this noise and shorten the context returned to the
+        language model.
   \item \emph{Broader evaluation:} A user study with preCICE practitioners would provide
         ecologically valid evidence of the assistant's utility beyond the controlled,
         scenario-based evaluation designed in this thesis.

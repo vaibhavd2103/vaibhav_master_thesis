@@ -1,0 +1,44 @@
+{
+  "latex-workshop.latex.tools": [
+    {
+      "name": "lualatex",
+      "command": "lualatex",
+      "args": [
+        "-shell-escape",
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "biber",
+      "command": "biber",
+      "args": ["%DOCFILE%"]
+    },
+    {
+      "name": "makeglossaries",
+      "command": "makeglossaries",
+      "args": ["%DOCFILE%"],
+      "env": {
+        "PATH": "C:\\Program Files\\Git\\usr\\bin;${env:PATH}"
+      }
+    }
+  ],
+  "latex-workshop.latex.recipes": [
+    {
+      "name": "lualatex -> biber -> makeglossaries -> lualatex*2",
+      "tools": [
+        "lualatex",
+        "biber",
+        "makeglossaries",
+        "lualatex",
+        "lualatex"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipe.default": "lualatex -> biber -> makeglossaries -> lualatex*2",
+  "latex-workshop.latex.outDir": "%DIR%",
+  "latex-workshop.latex.autoBuild.run": "never",
+  "latex-workshop.view.pdf.viewer": "tab"
+}
