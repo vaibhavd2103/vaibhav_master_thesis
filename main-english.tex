@@ -33,6 +33,9 @@
 \usepackage{ifplatform}
 \usepackage{upquote}
 
+\usepackage{xcolor}
+\usepackage{soul}
+
 \usepackage[ngerman,main=english]{babel}
 \addto\extrasenglish{\languageshorthands{ngerman}\useshorthands{"}}
 
@@ -1455,6 +1458,7 @@ model with the same calling convention as the native tool groups.
   \item[precice\_init] Validates a proposed coupling topology against a \gls{json} schema and,
         if valid, invokes the preCICE \gls{cli} to scaffold a new project from it.
   \item[precice\_profiling\_analyze] Summarizes profiling output produced by a preCICE run.
+  \item[more\_tools\_to\_be\_added] \hl{I need to add more profiling tools which are developed, but need to be tested first and once working will be added here for the reference. }
 \end{description}
 
 Because these tools depend on an external binary that may not be installed, every tool in this
@@ -1467,7 +1471,7 @@ server remains usable in its absence.
 \section{Implementation Details}\label{sec:mcp-server:implementation}
 % ----------------------------------------------------------------
 
-The preCICE \gls{mcp} server is implemented in Python~3.10\slash 3.11 using the official
+The preCICE \gls{mcp} server is implemented in Python >=3.10 using the official
 \texttt{mcp} Python \gls{sdk} through its FastMCP interface.
 The server entry point loads environment configuration, constructs a single \texttt{FastMCP}
 instance, registers all five tool groups, and starts the \gls{json}-\gls{rpc} event loop over
@@ -1476,7 +1480,7 @@ standard \gls{io}.
 \paragraph{Dependency management.}
 The server depends on \texttt{lxml} for lightweight \gls{xml} inspection, \texttt{numpy} for
 vector similarity computation over cached knowledge-base embeddings, an OpenAI-compatible HTTP
-client for embedding requests, and \texttt{mcp} for the protocol implementation itself.
+client for embedding requests, \texttt{mcp} for the protocol implementation itself, \texttt{jsonschema} for validating JSON schemas while creating preCICE projects, \texttt{typer} for exposing the commands and args for the \textbf{precice-ai} cli.
 All dependencies are declared in \texttt{pyproject.toml}, which is also the source of the
 \texttt{precice-ai} and \texttt{precice-ai-server} console-script entry points; a flat
 \texttt{requirements.txt} is kept for convenience but is not the authoritative install path.
@@ -1486,7 +1490,7 @@ Tools consistently return a plain-text, human-readable result on success and a s
 human-readable error message on failure, rather than raising an exception up to the \gls{mcp}
 transport layer.
 This convention allows the language model to detect and report errors gracefully, and keeps the
-server process alive across malformed requests instead of crashing the entire session.
+server process alive across malformed requests instead of crashing the entire session. The errors are easy to understand, debug and solve making the overall usage of these tools efficient.
 
 \paragraph{Path resolution and the command-execution safety model.}
 The server resolves the projects root either from the \texttt{PRECICE\_PROJECTS\_DIR}
@@ -1571,7 +1575,7 @@ threads and in the discussions surrounding past issues and pull requests.
 
 For example, a user who asks \emph{``What is the difference between serial explicit and
 parallel implicit coupling?''} requires access to conceptual documentation.
-A user who asks \emph{``My simulation diverges with Aitken relaxation---what should I try?''}
+A user who asks \emph{``My simulation diverges with Aitken relaxation, what should I try?''}
 may be best served by a forum thread from a user who encountered the same problem, or by the
 discussion attached to a closed issue describing a similar symptom.
 An ungrounded \gls{llm} may answer such questions with plausible-sounding but incorrect
@@ -1607,14 +1611,14 @@ drifting apart as two independently maintained pipelines.
 
 \paragraph{Online retrieval: semantic path.}
 On first use, or when a category's cached assets are missing or stale, the relevant
-\texttt{.npz} archive is downloaded from the GitHub Release and cached locally.
+\texttt{.npz} archive is downloaded from the GitHub Release and cached locally. A small check is passed before querying through the assets, i.e. the assets are not older than 4 days. The knowledge base generation happens via a GitHub Action every 4 days. So on the client side it's always checked the local assets are not any older than 4 days and are in sync with the GitHub assets.
 At query time, only the user's question, not the underlying document corpus, is sent to the
 embedding \gls{api}; the resulting query vector is compared against the cached document vectors
 by cosine similarity, and the top-$k$ chunks are returned together with their source metadata.
 Document embeddings are therefore always precomputed offline, which keeps the marginal cost and
 latency of a query low and avoids re-embedding the same corpus on every installation.
 
-\paragraph{Online retrieval: lexical path.}
+\paragraph{Offline retrieval: lexical path.}
 The lexical path performs keyword-based retrieval directly against the shared local index and
 makes no external network call at all, which keeps a useful subset of the assistant's knowledge
 available even when no embedding \gls{api} key is configured, and gives the evaluation described
@@ -1648,11 +1652,11 @@ The preCICE documentation and tutorial pages are written in Markdown and hosted 
 GitHub repository.
 Each page is split into sections using heading boundaries, and code blocks within sections are
 retained, since they often contain configuration examples that are directly relevant to a
-user's query.
+user's query. There are also scripts written inside the markdown pages which computes the content shown on the website, fetching this content is a challenge as the website's script needs to be ran first and the content could be ingested.
 
 \paragraph{Forum indexing.}
 Forum threads are retrieved via the Discourse \gls{api}, which provides structured \gls{json}
-responses containing the post sequence, author names, timestamps, and category information.
+responses containing the post sequence, author names, timestamps, and category information, all of which is stored the category \texttt{forum} and is used as a technical guide, news, updates and discussion source. 
 
 \paragraph{Issue and pull-request indexing.}
 Issues and pull requests are retrieved via the GitHub \gls{api} and indexed as their own
@@ -1806,6 +1810,8 @@ whichever tools the connected \gls{mcp} server exposes:
   \item[search\_forum\_live] Performs a live query against the Discourse forum's search
         \gls{api}, bypassing the local index for content that may not yet be indexed.
   \item[read\_attached\_file] Reads a file the user has attached to the current chat session.
+ 
+  \item[the\_extra\_tools]  \hl{The set of tools need to be updated, some tools are removed and some were added which will be reflected here.}
 \end{description}
 
 Every file-scoped tool applies the same boundary check: a requested path is resolved against
