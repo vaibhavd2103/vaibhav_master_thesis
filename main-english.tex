@@ -1344,8 +1344,7 @@ natural-language explanation with references to the specific log entries.
 
 \Cref{lst:log-tool-example} shows an abridged, representative excerpt of an actual
 \texttt{analyze\_precice\_logs} invocation against a two-participant \gls{fsi} project.
-The tool scans every log file discovered in the project directory, including files that turn
-out to be unrelated to the simulation itself, and reports a per-file verdict together with a
+The tool scans every log file discovered in the project directory, and reports a per-file verdict together with a
 trailing excerpt.
 For the participant log files, the verdict correctly distinguishes a clean run
 (\texttt{precice-Fluid-iterations.log}) from a run that terminated with an unhandled exception
