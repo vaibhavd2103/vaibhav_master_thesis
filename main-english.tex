@@ -1774,13 +1774,14 @@ with the routing decision after every agent invocation reduced to a single condi
   \textit{[Architecture diagram: browser chat UI connected over SSE to a FastAPI server. The
   server holds per-session state (working directory, message history) and forwards each turn
   into a LangGraph StateGraph. The graph has an agent node (builds system prompt, calls the
-  LLM with bound tools) and a tools node (a ToolNode executing whichever of the 7 native tools
+  LLM with bound tools) and a tools node (a ToolNode executing whichever of the native tools
   -- search\_precice\_docs, list/read/write\_project\_file, validate\_precice\_config,
   search\_forum\_live, read\_attached\_file -- the model requested), connected by a conditional
   edge (tool\_calls present to tools, otherwise to END) and a fixed edge from tools back to
-  agent. search\_precice\_docs is served by a separate, locally hosted ChromaDB vector store
-  populated by an hourly ingestion job that scrapes preCICE documentation pages and Discourse
-  forum topics. The file tools are sandboxed to the session's chosen working directory. A
+  agent. search\_precice\_docs reads directly from the same local knowledge-base cache
+  (\textasciitilde/.precice-ai/kb\_store) that the preCICE AI MCP server's own knowledge tools
+  populate; this prototype builds and ingests no knowledge-base content of its own. The file
+  tools are sandboxed to the session's chosen working directory. A
   dashed arrow shows the same process also spawning the preCICE AI MCP server (Chapter 4) as a
   stdio subprocess and calling its 26 tools the same way it calls its own 7.]}%
   \vspace{4cm}}}
@@ -1794,12 +1795,16 @@ with the routing decision after every agent invocation reduced to a single condi
 \end{figure}
 
 \paragraph{Native tools.}
-Seven tools are implemented directly in this prototype and bound to the model alongside
-whichever tools the connected \gls{mcp} server exposes:
+A small number of tools are implemented directly in this prototype and bound to the model
+alongside whichever tools the connected \gls{mcp} server exposes:
 
 \begin{description}[font=\ttfamily]
-  \item[search\_precice\_docs] Performs a retrieval query against a locally hosted vector store
-        populated by this prototype's own ingestion pipeline, described below.
+  \item[search\_precice\_docs] Performs a retrieval query against the same local knowledge-base
+        cache that the preCICE \gls{mcp} server's knowledge tools populate, described in
+        \cref{sec:context-retrieval}.
+        This prototype builds and ingests no knowledge-base content of its own: it expects the
+        knowledge base to already have been built and cached on disk by the preCICE \gls{mcp}
+        server (or its \gls{cli}) beforehand, and queries that cache directly.
   \item[list\_project\_files] Returns a tree listing of the session's working directory.
   \item[read\_project\_file] Reads a file from within the working directory, truncating large
         files and rejecting binary content.
@@ -1810,8 +1815,6 @@ whichever tools the connected \gls{mcp} server exposes:
   \item[search\_forum\_live] Performs a live query against the Discourse forum's search
         \gls{api}, bypassing the local index for content that may not yet be indexed.
   \item[read\_attached\_file] Reads a file the user has attached to the current chat session.
- 
-  \item[the\_extra\_tools]  \hl{The set of tools need to be updated, some tools are removed and some were added which will be reflected here.}
 \end{description}
 
 Every file-scoped tool applies the same boundary check: a requested path is resolved against
@@ -1823,22 +1826,25 @@ own control.
 Every tool returns a plain string and never raises an exception, so that a single failing tool
 call cannot terminate the surrounding response stream.
 
-\paragraph{Independent retrieval pipeline.}
-Unlike the \gls{mcp} server's pre-built, release-distributed knowledge base described in
-\cref{sec:context-retrieval}, this prototype ingests and indexes content itself, at startup and
-on an hourly schedule thereafter: a fixed set of preCICE documentation pages and the most
-active Discourse forum topics are scraped, stripped of markup, split into overlapping chunks,
-and embedded into a locally hosted vector store.
-Re-ingesting a source overwrites its previous chunks rather than duplicating them, keeping the
-index consistent across repeated runs.
-This self-refreshing design trades the reproducibility and offline distributability of the
-\gls{mcp} server's pre-built knowledge base for currency: the LangGraph agent's index is at most
-an hour out of date with respect to its sources, whereas the \gls{mcp} server's knowledge base
-is only as current as its most recent published release, refreshed on demand through
-\texttt{kb\_query\_precice\_live}.
-The existence of two independently implemented retrieval pipelines over overlapping source
-material is deliberately exploited in \cref{sec:evaluation} as a point of comparison, alongside
-the lexical-versus-semantic comparison internal to the \gls{mcp} server's own knowledge base.
+\paragraph{Shared retrieval pipeline.}
+This prototype does not build, ingest, or maintain a knowledge base of its own.
+It relies entirely on the same local knowledge-base cache that the preCICE \gls{mcp} server
+populates and maintains, as described in \cref{sec:context-retrieval}: the pre-built, dual
+lexical-and-semantic knowledge base, downloaded from GitHub Release assets and cached under
+\texttt{\textasciitilde/.precice-ai/kb\_store}.
+In practice, this means the knowledge base must first be built and cached by running the
+preCICE \gls{mcp} server or its \gls{cli} (for example through \texttt{precice-ai bootstrap} or
+\texttt{precice-ai kb ingest}) before this prototype is started; \texttt{search\_precice\_docs}
+then reads that same cache directly rather than maintaining an independent copy.
+This design choice avoids duplicating the ingestion, embedding, and freshness-tracking logic
+already implemented for the \gls{mcp} server, at the cost of making this prototype depend on
+that cache having been populated beforehand, which it does not build or refresh itself.
+Because both prototypes ultimately query the same underlying knowledge base rather than two
+independently built ones, the lexical-versus-semantic and freshness comparisons carried out in
+\cref{sec:evaluation} characterize a single shared retrieval pipeline rather than two competing
+ones; the comparison between the two prototypes in that chapter instead centers on
+orchestration, tool selection, and the native project-file and validation tools each one adds
+around that shared knowledge base.
 
 \paragraph{Session model.}
 State is held entirely in memory: a session is created with an identifier, associated with a
@@ -1869,8 +1875,8 @@ prototypes across the dimensions relevant to the evaluation.
                               & Codex, Cursor, etc.)             & browser \gls{ui}                  \\
     Orchestration             & Delegated to the client          & Owned end to end (LangGraph)      \\
     Dynamic project access   & Yes (via project tools)          & Yes (native file tools)           \\
-    Knowledge-base retrieval & Pre-built, release-distributed;  & Self-ingested, hourly-refreshed;  \\
-                              & lexical and semantic paths       & semantic only                     \\
+    Knowledge-base retrieval & Builds and maintains the shared  & Reads the same shared cache;      \\
+                              & cache; lexical and semantic paths & semantic queries only, no ingestion \\
     Config validation        & Via \gls{cli}-backed tool        & Via native tool (same \gls{cli})  \\
     Extensibility            & High (new tool groups, any       & Moderate (edit the native tool    \\
                               & \gls{mcp} client)                 & module, or add an \gls{mcp} client) \\
@@ -1881,17 +1887,19 @@ prototypes across the dimensions relevant to the evaluation.
   \end{tabular}
 \end{table}
 
-The \gls{mcp} server prototype offers broad client compatibility and a reproducible,
-centrally published knowledge base, at the cost of depending on a third-party client
-application to supply the orchestration loop and the user interface.
+The \gls{mcp} server prototype offers broad client compatibility and owns the knowledge base end
+to end, building, refreshing, and publishing it, at the cost of depending on a third-party
+client application to supply the orchestration loop and the user interface.
 The LangGraph prototype owns its orchestration loop and interface outright, which allows it to
-stream intermediate tool calls into a purpose-built \gls{ui} and to keep its retrieval index
-continuously current, at the cost of a heavier local footprint and a knowledge base that is
-rebuilt independently rather than centrally distributed.
-Because the LangGraph prototype can itself consume the \gls{mcp} server as a subprocess, the two
-are not strictly exclusive alternatives in practice; they are evaluated separately in
-\cref{sec:evaluation} to isolate the effect of orchestration and retrieval design from the
-effect of simply having tool access at all.
+stream intermediate tool calls into a purpose-built \gls{ui}, but it deliberately does not
+duplicate the knowledge-base pipeline: it reads the same cache the \gls{mcp} server maintains,
+which keeps the two prototypes consistent with each other but makes the LangGraph prototype
+dependent on that cache having already been built.
+Because the LangGraph prototype can itself consume the \gls{mcp} server as a subprocess, and
+because both prototypes share the same underlying knowledge base, the two are not strictly
+exclusive alternatives in practice; they are evaluated separately in \cref{sec:evaluation} to
+isolate the effect of orchestration and native tool design from the effect of simply having
+tool access at all, rather than to compare two competing knowledge bases.
 
 
 %%% ===============================================================
@@ -2244,10 +2252,11 @@ Several directions for future work are motivated by the analysis and preliminary
         carefully scoped write operations, building on the existing backup tool, would enable
         the assistant to apply suggested changes directly rather than presenting them as text
         for the user to copy.
-  \item \emph{Direct retrieval-pipeline comparison:} Running the same question set through both
-        prototypes' retrieval pipelines under matched conditions would clarify whether a
-        pre-built, periodically republished knowledge base or a continuously self-refreshing
-        one is the better default for a locally run assistant.
+  \item \emph{An independent ingestion path for the LangGraph prototype:} The LangGraph
+        prototype currently has no knowledge-base ingestion of its own and depends entirely on
+        the cache built by the preCICE \gls{mcp} server or \gls{cli} being present beforehand.
+        Giving it the ability to trigger, or fall back to, its own ingestion would remove this
+        cross-prototype dependency and make it usable standalone.
   \item \emph{Simulation execution tools:} A tool that can launch and monitor a preCICE
         simulation would support the full phase-3 workflow, which today still requires the user
         to start the simulation outside the assistant.
