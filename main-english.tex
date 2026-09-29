@@ -1181,17 +1181,14 @@ directly into the language model's context without an additional formatting step
 
 \begin{figure}[htbp]
   \centering
-  \framebox[\linewidth]{\parbox{\linewidth}{\centering\vspace{4cm}%
-  \includegraphics[width=1\linewidth]{figures/precice-ai mcp architecture.png}
-  \textit{}%
-  \vspace{4cm}}}
+  \includegraphics[width=\linewidth]{figures/precice-ai mcp architecture.png}
   \caption{Architecture of the preCICE \gls{mcp} server. Any \gls{mcp} client, or the LangGraph
            prototype acting as a subprocess launcher, communicates with the server over
            \gls{json}-\gls{rpc}. The server routes tool calls to five tool-group modules that
            act on the local project directory, the preCICE configuration file, runtime log
            files, a locally cached knowledge base, and an externally installed preCICE
            \gls{cli}, respectively.}
-  \label{fig:precice-ai mcp-architecture.png}
+  \label{fig:mcp-architecture}
 \end{figure}
 
 
@@ -1761,17 +1758,14 @@ with the routing decision after every agent invocation reduced to a single condi
 
 \begin{figure}[htbp]
   \centering
-  \framebox[\linewidth]{\parbox{\linewidth}{\centering
-  \includegraphics[width=0.65\linewidth]{figures/precice-ai langgraph architecture.png}
-  \textit{}%
-  \vspace{4cm}}}
+  \includegraphics[height=0.85\textheight,width=\linewidth,keepaspectratio]{figures/precice-ai langgraph architecture.png}
   \caption{Architecture of the LangGraph prototype. The browser communicates with a FastAPI
            server over server-sent events; each chat turn runs through a LangGraph
            \texttt{StateGraph} that alternates between an agent node and a tools node until the
            model returns a final answer. Tools are drawn both from a native tool set and,
            through a subprocess connection, from the preCICE \gls{mcp} server described in
            \cref{sec:mcp-server}.}
-  \label{fig:precice-ai langgraph architecture.png}
+  \label{fig:langgraph-architecture}
 \end{figure}
 
 \paragraph{Native tools.}
