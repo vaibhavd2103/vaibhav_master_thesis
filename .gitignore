@@ -25,6 +25,9 @@
 *.fdb_latexmk
 *.xdy
 _minted/
+_minted-*/
+*.data.minted
+*.pytxcode
 
 # Final PDF is a build product; Overleaf/local builds regenerate it
 main-english.pdf
