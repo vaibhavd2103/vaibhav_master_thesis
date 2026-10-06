@@ -947,14 +947,14 @@ underlies most contemporary tool-calling agent runtimes, including the graph-bas
 orchestration provided by LangGraph~\cite{langgraph2024} that is used to implement the second
 prototype described in \cref{sec:claudecode-approach}.
 
-The retrieval component of both prototypes draws on a well-established line of work in
+The retrieval component of both prototypes are based on a well-established line of work in
 \gls{rag}.
 \citeauthor{gao2023retrieval}~\cite{gao2023retrieval} survey the field and identify the key
-design choices --- chunking strategy, embedding model, and retrieval depth --- that most
-strongly affect downstream answer quality, all of which are revisited in the pipeline design
+design choices, i.e. chunking strategy, embedding model, and retrieval depth; which most
+strongly affect quality of the downstream answer, all of which are examined in the pipeline design
 described in \cref{sec:context-retrieval}.
 \citeauthor{es2023ragas}~\cite{es2023ragas} propose a reference-free evaluation methodology
-built around faithfulness, answer relevance, and context relevance, which informs the
+built around faithfulness, answer relevance, and context relevance, which addresses the
 qualitative assessment criteria applied to the open-ended questions in the evaluation.
 
 Taken together, this body of work establishes the building blocks on which preCICE AI rests,
@@ -1015,64 +1015,75 @@ searching the Discourse forum.
 This is often the most time-consuming phase, particularly for users who encounter an error
 for the first time.
 
-An intelligent assistant is most valuable in phases 2 and 4, where knowledge-intensive
-tasks like configuration decision-making and error diagnosis, are the primary bottlenecks.
+\paragraph{\glspl{llm} have shown good results in configuring files, understanding error messages, and overall
+better analysis and debugging in different projects. Based on these findings it suggests that 
+an intelligent assistant is most valuable in phases 2 and 4, where knowledge-intensive
+tasks like configuration decision-making and error diagnosis, are the primary bottlenecks in preCICE projects.}
 
 
 % ----------------------------------------------------------------
 \section{Data Understanding}\label{sec:problem-exposition:data-understanding}
 % ----------------------------------------------------------------
 
-The following data sources are available to preCICE AI.
+The preCICE ecosystem exposes several distinct data sources that users regularly use when
+setting up, running, and debugging simulations. Understanding what each source contains and
+how it can be accessed informs which of them are incorporated into preCICE AI and which are
+left outside its scope.
 
-\paragraph{Local project files.}
-A preCICE project directory typically contains the configuration file, solver-specific
-configuration files, build scripts, and run scripts.
-These files are available on the user's local file system and constitute the primary grounding
-source for project-specific queries.
+\noindent\textbf{Local project files.} A preCICE project directory typically contains the
+configuration file, solver-specific configuration files, build scripts, and run scripts.
+These files are available on the user's local file system and are the most immediately
+relevant source for any project-specific query, since they reflect the exact state of the
+simulation the user is currently working on.
 
-\paragraph{preCICE log files.}
-preCICE writes structured log files during simulation execution, including convergence data
-per iteration, watchpoint values, timing breakdowns, and error messages.
-Log files follow naming conventions (\texttt{precice-<participant>-<type>.log}) and are
-located in the directory from which the simulation was launched.
+\noindent\textbf{preCICE log files.} preCICE writes structured log files during simulation
+execution, including convergence data per iteration, watchpoint values, timing breakdowns, and
+error messages. Log files follow the naming convention
+\texttt{precice-<participant>-<type>.log} and are located in the directory from which the
+simulation was launched.
 
-\paragraph{preCICE documentation.}
-The official documentation at \url{https://precice.org/} consists of approximately 80 Markdown
-pages covering configuration reference, \gls{api} documentation, tutorials, and
-troubleshooting guides.
-The documentation is publicly available and can be crawled and indexed offline.
+\noindent\textbf{preCICE documentation.} The official documentation at \url{https://precice.org/}
+consists of approximately 80 Markdown pages covering the configuration reference, \gls{api}
+documentation, tutorials, and troubleshooting guides. The documentation is publicly available
+and can be crawled and indexed offline.
 
-\paragraph{preCICE Discourse forum.}
-The Discourse forum contains several thousand threads representing community knowledge
-accumulated over years of preCICE usage.
-Forum posts contain user-reported problems, expert answers, and configuration examples.
-The forum content is publicly accessible via the Discourse \gls{api} and provides a
-complementary knowledge source to the official documentation.
+\noindent\textbf{preCICE Discourse forum.} The Discourse forum contains several thousand
+threads representing community knowledge accumulated over years of preCICE usage. Forum
+posts contain user-reported problems, expert answers, and configuration examples, and are
+publicly accessible via the Discourse \gls{api}.
 
-\paragraph{preCICE configuration schema.}
-The preCICE configuration \gls{xml} schema formally specifies valid configuration elements,
-attributes, and their types.
-Rather than reimplementing schema validation, the assistant wraps the configuration-checking
-subcommand of the official preCICE \gls{cli}, so that validation results always match the
-behaviour of the reference toolchain and track future changes to the schema automatically.
+\noindent\textbf{GitHub issue tracker and pull requests.} The preCICE source repository has
+an active issue tracker and pull-request history that records reported bugs, feature
+discussions, and the reasoning behind past design decisions. This content is publicly accessible
+through the GitHub \gls{api} and frequently contains troubleshooting detail that complements
+the curated documentation.
 
-\paragraph{GitHub issue tracker and pull requests.}
-The preCICE source repository hosts an active issue tracker and pull-request history that
-records reported bugs, feature discussions, and the reasoning behind past design decisions.
-This content is publicly accessible through the GitHub \gls{api} and, alongside the Discourse
-forum, is treated as a distinct knowledge-base category, since issue and pull-request discussions
-frequently contain troubleshooting detail that predates or supplements the curated documentation.
+\noindent\textbf{preCICE configuration schema.} The preCICE \gls{xml} schema formally
+specifies valid configuration elements, attributes, and their types. Rather than reimplementing
+schema validation independently, the assistant wraps the configuration-checking subcommand
+of the official \texttt{precice-cli}, so that validation results always match the behaviour of
+the reference toolchain and track future schema changes automatically.
 
-\paragraph{Command execution boundary.}
-Beyond passively read data, the assistant is also permitted to execute a narrow, explicitly
-allowlisted set of read-oriented shell commands inside a project directory, such as listing
-files or inspecting a run script, so that it can answer questions that require more context than
-any single file provides.
-This capability is deliberately constrained: commands are checked against an allowlist of safe
-prefixes and a blocklist of destructive patterns before execution, and all file-system access is
-resolved against, and confined to, the configured project directory.
+\noindent\textbf{Command execution boundary.} Beyond passively read data, the assistant is
+also permitted to execute a narrow, explicitly allowlisted set of read-oriented shell commands
+inside a project directory, such as listing files or inspecting a run script, so that it can
+answer questions that require broader context than any single file provides. Commands are
+checked against an allowlist of safe prefixes and a blocklist of destructive patterns before
+execution, and all file-system access is confined to the configured project directory.
 \Cref{sec:mcp-server:implementation} details this safety mechanism.
+
+Of these sources, the solution incorporates all of them to varying degrees. Local project files
+and log files are accessed directly at query time through the project and log tool groups,
+making them the most tightly integrated source and the primary basis for project-specific
+answers. The documentation, Discourse forum, and GitHub issue tracker are indexed offline
+into the knowledge base and retrieved at query time, meaning their content is always available
+even without a network connection at the time of the query; the trade-off is that the index
+reflects a snapshot of these sources at the time of indexing and must be periodically
+refreshed to remain current. Configuration schema validation is delegated entirely to the
+official \gls{cli} rather than reimplemented, which guarantees correctness but introduces a
+runtime dependency on a working preCICE installation. The command execution boundary sits
+outside the knowledge base entirely and is treated as a last-resort capability for queries
+that cannot be answered by reading individual files.
 
 
 % ----------------------------------------------------------------
