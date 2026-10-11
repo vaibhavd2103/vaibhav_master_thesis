@@ -34,7 +34,14 @@
 \usepackage{upquote}
 
 \usepackage{xcolor}
+% \hl{} marks text that is still in progress or not yet backed by evaluation runs.
+% lua-ul (LuaLaTeX) handles \gls, \cite, etc. inside highlights; soul does not.
 \usepackage{soul}
+\ifluatex
+  \usepackage{luacolor}
+  \usepackage{lua-ul}
+  \AtBeginDocument{\renewcommand{\hl}[1]{\highLight[yellow]{#1}}}
+\fi
 
 \usepackage[ngerman,main=english]{babel}
 \addto\extrasenglish{\languageshorthands{ngerman}\useshorthands{"}}
@@ -324,7 +331,7 @@
 \input{commands}
 
 \usepackage[
-  title={Developing an AI Assistant for a multi-physics coupling library},
+  title={Developing an AI Assistant for a Multi-Physics Coupling Library},
   author={Vaibhav Dange},
   type=master,
   institute=ipvs,
@@ -445,10 +452,10 @@ against an ungrounded baseline.
 Accuracy is assessed across two retrieval modes, several language models of differing
 capability, and question sets of increasing difficulty.
 
-Results indicate measurable improvements over an ungrounded baseline on preCICE-related
+\hl{Results indicate measurable improvements over an ungrounded baseline on preCICE-related
 tasks, suggesting that grounded, tool-integrated language-model assistants can meaningfully
 narrow the usability gap in scientific simulation software and point toward an architecture
-that generalises to other simulation frameworks.
+that generalises to other simulation frameworks.}
 
 \microtypesetup{protrusion=false}
 \tableofcontents
@@ -652,8 +659,8 @@ underlying tools and retrieval pipeline that both prototypes share.
 This prototype is described in \cref{sec:claudecode-approach}.
 
 Finally, a scenario-based evaluation spanning simulation setup, configuration error detection,
-and log analysis is executed across three language models of differing capability: Claude
-Sonnet, GPT-5 Codex, and Mistral Mini, and under two knowledge-base configurations,
+and log analysis is executed across three language models of differing capability\hl{: Claude
+Sonnet, GPT-5 Codex, and Mistral Mini,} and under two knowledge-base configurations,
 lexical and semantic retrieval.
 Both prototypes are compared against each other and against an unassisted baseline, with
 narrowly defined questions assessed through similarity-based scoring and open-ended queries
@@ -670,16 +677,16 @@ in \cref{sec:evaluation} and \cref{sec:evaluation:results}.
 
 \section*{Results}
 
-The \gls{mcp} server prototype has been implemented and validated with all five tool groups
+The \gls{mcp} server prototype has been implemented \hl{and validated with all five tool groups
 (project, configuration, log, knowledge base, and \gls{cli} wrapper) returning correct results
 on a set of representative preCICE projects.
 Functional testing shows that all implemented tools respond correctly to well-formed requests
-and return structured error messages for invalid inputs.
+and return structured error messages for invalid inputs.}
 The LangGraph prototype has also been implemented as a self-contained agent with its own
 basic tool-set, integration with the \gls{mcp} server for retrieval pipeline and advanced tools, 
 and has been observed to complete representative preCICE project-inspection and documentation-lookup tasks end to end.
-Preliminary indexing of the preCICE documentation confirms that semantic search returns
-relevant passages with a precision of \hl{XYZ} on a sampled set of 20 queries.
+\hl{Preliminary indexing of the preCICE documentation confirms that semantic search returns
+relevant passages with a precision of XYZ on a sampled set of 20 queries.}
 A full quantitative evaluation across all scenarios, both prototypes, and combinations of knowledge-base 
 mode, model capability, and question difficulty is described in \cref{sec:evaluation}.
 
@@ -695,11 +702,11 @@ tools shows that the underlying tool design is not an artifact of any single cli
 orchestration framework, and can be integrated to any agentic client.
 The retrieval component is expected to address the accuracy shortfall observed in ungrounded
 \gls{llm} interaction on preCICE-specific questions.
-After complete comparison of both prototypes against the evaluation criteria, determined that the \gls{mcp}
-approach is comparatively a better solution to close the gap between using preCICE and understanding 
-preCICE in-depth. Likewise, the semantic retrieval from the knowledge base performs much better in answering 
-user queries than the lexical approach, and the high thinking models with larger context-window and more 
-parameters provides more adequate deliverables by choosing tools and incorporating tool responses more accurately.
+\hl{After complete comparison of both prototypes against the evaluation criteria, determined that the \gls{mcp}
+approach is comparatively a better solution to close the gap between using preCICE and understanding
+preCICE in-depth. Likewise, the semantic retrieval from the knowledge base performs much better in answering
+user queries than the lexical approach, and the high thinking models with larger context-window and more
+parameters provides more adequate deliverables by choosing tools and incorporating tool responses more accurately.}
 
 
 %%% ===============================================================
@@ -1289,10 +1296,10 @@ which together configure the knowledge-base retrieval pipeline described in
 \cref{sec:context-retrieval}. A simplified version of the server registration code is shown
 in \cref{lst:server-startup}.
 
-The server was validated through manual functional testing in which each of the 26 tools was
+\hl{The server was validated through manual functional testing in which each of the 26 tools was
 invoked directly against representative preCICE projects, including the
 \emph{perpendicular-flap} and \emph{flow-over-heated-plate} tutorial cases, verifying correct
-output for well-formed inputs and graceful error responses for malformed or missing ones.
+output for well-formed inputs and graceful error responses for malformed or missing ones.}
 A broader scenario-based evaluation across multiple clients and language models is presented
 in \cref{sec:evaluation}.
 
@@ -1960,7 +1967,7 @@ Five evaluation scenario categories are defined, each consisting of multiple con
 Three reference preCICE projects of increasing complexity serve as the basis for all
 evaluation scenarios: the official \emph{perpendicular-flap} tutorial (\gls{fsi}, two
 participants), the \emph{flow-over-heated-plate} tutorial (\gls{cht}, two participants), and
-a custom three-participant configuration designed to exercise multi-coupling scenarios. The
+\hl{a custom three-participant configuration designed to exercise multi-coupling scenarios}. The
 baseline against which both prototypes are measured is ungrounded \gls{llm} interaction,
 meaning the same underlying model presented with only the user's natural-language query and
 no access to project tools or to the knowledge base.
@@ -2043,38 +2050,39 @@ of whether the final natural-language answer happened to be correct.
 in \cref{sec:evaluation:setup} will be reported here upon completion of the evaluation runs.
 The following reports results available at the time of writing.}
 
-The functional testing of all 26 implemented \gls{mcp} tools, across the project, configuration, log, knowledge-base, and
+\hl{The functional testing of all 26 implemented \gls{mcp} tools, across the project, configuration, log, knowledge-base, and
 \gls{cli}-wrapper groups described in \cref{sec:mcp-server}, were tested against the three
 reference projects.
 All tools returned correct results for well-formed inputs.
 Error handling was verified by providing invalid file paths, malformed \gls{xml}, and
 out-of-range parameters; in all cases the server returned a human-readable error message
 without crashing, and the \gls{cli}-backed tools correctly reported an installation hint when
-\texttt{precice-cli} was not available on the system path.
+\texttt{precice-cli} was not available on the system path.}
 
-A preliminary retrieval evaluation was conducted on a set of 20 queries sampled from the
+\hl{A preliminary retrieval evaluation was conducted on a set of 20 queries sampled from the
 Discourse forum, GitHub issue tracker, official documentation, using the semantic retrieval path.
 For each query, the top-5 retrieved documentation chunks were assessed for relevance.
 Results are shown in \cref{tab:retrieval-prelim}.
 This preliminary result motivates, the full lexical-versus-semantic comparison
-described in \cref{sec:evaluation:setup}.
+described in \cref{sec:evaluation:setup}.}
 
 \begin{table}[htbp]
   \caption{Preliminary retrieval quality for 20 sampled queries against the semantic retrieval
            path. Precision@5 is the fraction of the top-5 retrieved chunks rated as relevant by
-           a human assessor.}
+           a human assessor. \hl{Placeholder values, to be replaced once the retrieval
+           assessment has been run.}}
   \label{tab:retrieval-prelim}
   \centering
   \begin{tabular}{lcc}
     \toprule
     \textbf{Query category}       & \textbf{Precision@5} & \textbf{Queries} \\
     \midrule
-    Configuration syntax          & 0.84                 & 8                \\
-    Mapping methods               & 0.80                 & 5                \\
-    Coupling scheme tuning        & 0.72                 & 4                \\
-    General usage                 & 0.90                 & 3                \\
+    Configuration syntax          & \hl{0.84}            & \hl{8}           \\
+    Mapping methods               & \hl{0.80}            & \hl{5}           \\
+    Coupling scheme tuning        & \hl{0.72}            & \hl{4}           \\
+    General usage                 & \hl{0.90}            & \hl{3}           \\
     \midrule
-    \textbf{Overall}              & \textbf{0.82}        & \textbf{20}      \\
+    \textbf{Overall}              & \hl{\textbf{0.82}}   & \hl{\textbf{20}} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -2102,7 +2110,7 @@ described in \cref{sec:evaluation:setup}.
   \textit{}%
   \vspace{5cm}}}
   \caption{Representative Codex session using the preCICE \gls{mcp} server on the same
-           evaluation scenario.}
+           evaluation scenario. \hl{Screenshot to be added.}}
   \label{fig:codex-screenshot}
 \end{figure}
 
@@ -2124,20 +2132,20 @@ described in \cref{sec:evaluation:setup}.
 \emph{Full interpretation will follow the completion of the evaluation runs described in
 \cref{sec:evaluation:setup,sec:evaluation:execution}.}
 
-The preliminary retrieval results (Precision@5 of 0.82) indicate that semantic search over the
+\hl{The preliminary retrieval results (Precision@5 of 0.82) indicate that semantic search over the
 preCICE documentation category is already accurate enough to provide useful grounding for the
 majority of user queries.
 The lower precision observed for coupling-scheme tuning queries (0.72) likely reflects the fact
 that tuning advice is distributed across multiple documentation sections and forum threads,
 making it harder to retrieve in a single top-5 set; the planned lexical-versus-semantic
 comparison, and the forum and issue-tracker categories that the preliminary evaluation did not
-yet cover, are both expected to provide further insights on this category specifically.
+yet cover, are both expected to provide further insights on this category specifically.}
 
-Functional testing confirms that the \gls{mcp} server is robust to malformed inputs and handles
+\hl{Functional testing confirms that the \gls{mcp} server is robust to malformed inputs and handles
 error cases gracefully across all five tool groups.
 The plain-text tool output format was found to be well-suited for \gls{llm} consumption, with
 concise, purpose-built summaries enabling the model to reference specific facts in its responses
-rather than restating entire file contents.
+rather than restating entire file contents.}
 
 The qualitative comparison in \cref{tab:approach-comparison} suggests that the \gls{mcp} server
 prototype offers broader client compatibility and a more reproducible knowledge base, while the
@@ -2174,7 +2182,7 @@ The completed contributions of this work are:
   \item The design and implementation of a dual lexical-and-semantic retrieval pipeline over
         seven categories of preCICE knowledge, including documentation, tutorials, the
         Discourse forum, and the GitHub issue tracker, published through versioned release
-        assets and validated by a preliminary retrieval-quality assessment
+        assets \hl{and validated by a preliminary retrieval-quality assessment}
         (\cref{sec:context-retrieval}).
   \item A second, architecturally independent prototype built with LangGraph that reuses the
         same class of tools inside a self-contained ReAct agent and its own browser interface,
@@ -2191,10 +2199,10 @@ The completed contributions of this work are:
 Answers to the research question: RQ1 (Tool integration) has been addressed by the implemented \gls{mcp} server, which
 demonstrates that the five identified tool groups are sufficient to support project overview,
 configuration inspection, log analysis, knowledge retrieval, and \gls{cli}-backed validation
-tasks across a set of representative preCICE projects.
+tasks \hl{across a set of representative preCICE projects}.
 RQ2 (Context retrieval) is substantially addressed: both the lexical and semantic retrieval
-paths have been implemented over the full seven-category knowledge base, and a preliminary
-quality assessment of the semantic path shows encouraging results, \hl{while the systematic
+paths have been implemented over the full seven-category knowledge base, \hl{and a preliminary
+quality assessment of the semantic path shows encouraging results}, \hl{while the systematic
 comparison between the two paths across model tiers and difficulty levels remains to be
 executed}.
 RQ3 (Prototype comparison) will be fully addressed by the evaluation runs described in
@@ -2269,9 +2277,89 @@ accessible to users of all experience levels.
 
 
 \clearpage
+\appendix
+\addcontentsline{toc}{part}{Appendix}
+
+%%% ===============================================================
+\chapter{Use of AI Tools}\label{sec:appendix-ai}
+%%% ===============================================================
+
+In accordance with the Principles for the Use of Artificial Intelligence by Students at the
+University of Stuttgart, this appendix documents the extent to which \gls{ai} tools were used in
+the course of this thesis, both for the software prototypes and for the written report.
+\gls{ai} tools were used as assistants for clearly delimited tasks.
+The research questions, the system architecture of both prototypes, the design of the
+evaluation, and the interpretation of results are the author's own work.
+Every \gls{ai}-generated suggestion, whether code or text, was reviewed, tested where
+applicable, and revised by the author before being adopted, and the author takes full
+responsibility for the final content.
+\Cref{tab:ai-usage} summarizes the individual uses.
+
+\begin{table}[htbp]
+  \caption{Overview of the tasks for which \gls{ai} tools were used in this thesis.}
+  \label{tab:ai-usage}
+  \centering
+  \small
+  \begin{tabular}{p{0.28\linewidth}p{0.64\linewidth}}
+    \toprule
+    \textbf{Area} & \textbf{Use of \gls{ai} tools} \\
+    \midrule
+    Lexical retrieval
+      & Optimizing the query-matching logic of the lexical knowledge-base path and the
+        parameterization of the \gls{bm25} ranking algorithm
+        (\cref{sec:context-retrieval}). \\
+    Security review
+      & Identifying potential security vulnerabilities in the \gls{mcp} server, such as
+        weaknesses in command execution and file-path handling, which were then fixed by
+        the author (\cref{sec:mcp-server}). \\
+    Tool descriptions
+      & Improving the docstrings, annotations, and natural-language descriptions of the
+        \gls{mcp} tools, through which the language model decides when and how to call a
+        tool. \\
+    Boilerplate code
+      & Generating initial boilerplate for selected components, namely the
+        \texttt{VectorKnowledgeBase} class, the \gls{html} formatter, and the optimization
+        of the \texttt{kb-ingest.yml} GitHub Actions workflow that builds and publishes the
+        knowledge base. \\
+    Evaluation scoring
+      & Scoring language-model answers against pre-written reference (ground-truth)
+        answers for one part of the evaluation, the easy-tier questions
+        (\cref{sec:evaluation:execution}). Medium- and difficult-tier answers were rated
+        manually. \\
+    Academic writing
+      & Improving the academic tone, wording, and readability of this report. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 
+\clearpage
 \pagestyle{empty}
 \renewcommand*{\chapterpagestyle}{empty}
-\Versicherung
+
+\chapter*{Declaration}
+
+I hereby declare that the work presented in this thesis is entirely my own.
+I did not use any other sources and aids than the listed ones.
+I have marked all direct or indirect transfers from other sources contained therein as
+referenced quotations.
+I assure that I have not used any aids that were explicitly ruled out by the examiner.
+
+In Appendix \enquote{Use of AI Tools} I have documented to what extent AI tools were used
+for generating any significant parts of this work.
+By submitting this work, I assume full responsibility for all content.
+I have taken notice of and I comply with the Principles for the Use of Artificial Intelligence
+by Students at the University of Stuttgart.
+
+Neither this work nor significant parts of it were part of another examination procedure.
+I have not published this work in whole or in part before.
+The electronic copy is consistent with all submitted hard copies.
+
+\vspace{3cm}
+
+\noindent
+\begin{tabular}{@{}p{0.45\linewidth}@{}}
+  \hrulefill \\
+  Date and signature of the student
+\end{tabular}
 \end{document}
