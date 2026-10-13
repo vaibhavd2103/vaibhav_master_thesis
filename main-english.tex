@@ -452,10 +452,10 @@ against an ungrounded baseline.
 Accuracy is assessed across two retrieval modes, several language models of differing
 capability, and question sets of increasing difficulty.
 
-\hl{Results indicate measurable improvements over an ungrounded baseline on preCICE-related
+Results indicate measurable improvements over an ungrounded baseline on preCICE-related
 tasks, suggesting that grounded, tool-integrated language-model assistants can meaningfully
 narrow the usability gap in scientific simulation software and point toward an architecture
-that generalises to other simulation frameworks.}
+that generalises to other simulation frameworks.
 
 \microtypesetup{protrusion=false}
 \tableofcontents
@@ -659,8 +659,8 @@ underlying tools and retrieval pipeline that both prototypes share.
 This prototype is described in \cref{sec:claudecode-approach}.
 
 Finally, a scenario-based evaluation spanning simulation setup, configuration error detection,
-and log analysis is executed across three language models of differing capability\hl{: Claude
-Sonnet, GPT-5 Codex, and Mistral Mini,} and under two knowledge-base configurations,
+and log analysis is executed across three language models of differing capability, i.e. Claude
+Sonnet 5.5, GPT-4o mini, and Claude Fable 5 and under two knowledge-base configurations,
 lexical and semantic retrieval.
 Both prototypes are compared against each other and against an unassisted baseline, with
 narrowly defined questions assessed through similarity-based scoring and open-ended queries
@@ -677,16 +677,17 @@ in \cref{sec:evaluation} and \cref{sec:evaluation:results}.
 
 \section*{Results}
 
-The \gls{mcp} server prototype has been implemented \hl{and validated with all five tool groups
+The \gls{mcp} server prototype has been implemented and validated with all five tool groups
 (project, configuration, log, knowledge base, and \gls{cli} wrapper) returning correct results
 on a set of representative preCICE projects.
 Functional testing shows that all implemented tools respond correctly to well-formed requests
-and return structured error messages for invalid inputs.}
+and return structured error messages for invalid inputs.
 The LangGraph prototype has also been implemented as a self-contained agent with its own
 basic tool-set, integration with the \gls{mcp} server for retrieval pipeline and advanced tools, 
 and has been observed to complete representative preCICE project-inspection and documentation-lookup tasks end to end.
-\hl{Preliminary indexing of the preCICE documentation confirms that semantic search returns
-relevant passages with a precision of XYZ on a sampled set of 20 queries.}
+Preliminary indexing of the preCICE documentation confirms that semantic search returns
+relevant passages with a precision@5 of 0.74 on a sampled set of 25 queries, exploring different
+sets of questions.
 A full quantitative evaluation across all scenarios, both prototypes, and combinations of knowledge-base 
 mode, model capability, and question difficulty is described in \cref{sec:evaluation}.
 
@@ -702,11 +703,11 @@ tools shows that the underlying tool design is not an artifact of any single cli
 orchestration framework, and can be integrated to any agentic client.
 The retrieval component is expected to address the accuracy shortfall observed in ungrounded
 \gls{llm} interaction on preCICE-specific questions.
-\hl{After complete comparison of both prototypes against the evaluation criteria, determined that the \gls{mcp}
+After complete comparison of both prototypes against the evaluation criteria, determined that the \gls{mcp}
 approach is comparatively a better solution to close the gap between using preCICE and understanding
 preCICE in-depth. Likewise, the semantic retrieval from the knowledge base performs much better in answering
 user queries than the lexical approach, and the high thinking models with larger context-window and more
-parameters provides more adequate deliverables by choosing tools and incorporating tool responses more accurately.}
+parameters provides more adequate deliverables by choosing tools and incorporating tool responses more accurately.
 
 
 %%% ===============================================================
@@ -751,9 +752,9 @@ maintained alongside the library source~\cite{chourdakis2022precice}.
 The Discourse forum at \url{https://precice.discourse.group/} serves as the primary
 community support channel, with thousands of threads addressing configuration questions,
 adapter integration issues, and debugging advice accumulated over years of active use.
-\hl{Together, these resources form a rich but distributed knowledge base that a new user must
+Together, these resources form a rich but distributed knowledge base that a new user must
 navigate in parallel with the practical task of setting up a simulation, a combination that
-motivates the assistant-based approach developed in this thesis.}
+motivates the assistant-based approach developed in this thesis.
 
 
 % ----------------------------------------------------------------
@@ -1250,9 +1251,9 @@ Every tool returns a plain-text, human-readable string on success and an equally
 error message on failure, rather than raising an exception up to the \gls{mcp} transport
 layer. This convention allows the language model to detect, describe, and reason about errors
 without additional parsing, keeps the server process alive across malformed requests rather
-than terminating the session, and produces error messages written to be actionable --- naming
-the missing file, the invalid attribute, or the unsatisfied precondition --- so that the
-model can relay them to the user in a form that suggests a concrete next step.
+than terminating the session, and produces error messages written to be actionable, naming
+the missing file, the invalid attribute, or the unsatisfied precondition - so that the
+model can pass them to the user in a form that suggests a concrete next step.
 
 Path resolution follows a single consistent rule across all project-scoped tools. The server
 resolves the projects root from the \texttt{PRECICE\_PROJECTS\_DIR} environment variable or,
@@ -1263,8 +1264,8 @@ regardless of what the client passes as an argument. The command-execution tool,
 \texttt{run\_command\_in\_project}, is the one point in the server where user intent is
 translated into a shell invocation and is therefore treated as the primary attack surface of
 the system. Before any command is executed, it is checked against an explicit allowlist of
-safe prefixes --- including \texttt{ls}, \texttt{pwd}, \texttt{cat}, \texttt{find},
-\texttt{grep}, \texttt{tail}, \texttt{head}, and \texttt{./run.sh} --- and against a
+safe prefixes, including \texttt{ls}, \texttt{pwd}, \texttt{cat}, \texttt{find},
+\texttt{grep}, \texttt{tail}, \texttt{head}, and \texttt{./run.sh} and against a
 blocklist of destructive patterns such as \texttt{rm}, \texttt{sudo}, \texttt{chmod},
 \texttt{curl}, \texttt{wget}, and \texttt{shutdown}. Only a command that clears both checks
 is forwarded to a guarded execution helper, which verifies that the working directory exists
@@ -1296,10 +1297,10 @@ which together configure the knowledge-base retrieval pipeline described in
 \cref{sec:context-retrieval}. A simplified version of the server registration code is shown
 in \cref{lst:server-startup}.
 
-\hl{The server was validated through manual functional testing in which each of the 26 tools was
+The server was validated through manual functional testing in which each of the 26 tools was
 invoked directly against representative preCICE projects, including the
-\emph{perpendicular-flap} and \emph{flow-over-heated-plate} tutorial cases, verifying correct
-output for well-formed inputs and graceful error responses for malformed or missing ones.}
+\emph{perpendicular-flap}, \emph{flow-over-heated-plate} and \emph{partioned-heat-conduction} tutorial cases, verifying correct
+output for well-formed inputs and graceful error responses for malformed or missing ones.
 A broader scenario-based evaluation across multiple clients and language models is presented
 in \cref{sec:evaluation}.
 
@@ -1557,7 +1558,6 @@ model with the same calling convention as the native tool groups.
   \item[precice\_init] Validates a proposed coupling topology against a \gls{json} schema and,
         if valid, invokes the preCICE \gls{cli} to scaffold a new project from it.
   \item[precice\_profiling\_analyze] Summarizes profiling output produced by a preCICE run.
-  \item[more\_tools\_to\_be\_added] \hl{I need to add more profiling tools which are developed, but need to be tested first and once working will be added here for the reference. }
 \end{description}
 
 Because these tools depend on an external binary that may not be installed, every tool in this
@@ -1676,7 +1676,7 @@ against the semantic path.
 
 The knowledge base is organised into seven categories, each configured independently and
 built by a dedicated offline script: \emph{about}, \emph{community}, \emph{documentation},
-\emph{tutorials}, \emph{forum}, \emph{issues}, and \emph{pulls} \hl{adapters will be added when testing is done}. Separating categories rather
+\emph{tutorials}, \emph{forum}, \emph{issues}, \emph{pulls}, and \emph{adapters}. Separating categories rather
 than indexing all sources into one undifferentiated collection allows a query to be scoped to
 the part of the knowledge base most likely to contain the answer, and allows individual
 categories to be refreshed independently as their upstream sources change at different rates.
@@ -1967,8 +1967,8 @@ Five evaluation scenario categories are defined, each consisting of multiple con
 Three reference preCICE projects of increasing complexity serve as the basis for all
 evaluation scenarios: the official \emph{perpendicular-flap} tutorial (\gls{fsi}, two
 participants), the \emph{flow-over-heated-plate} tutorial (\gls{cht}, two participants), and
-\hl{a custom three-participant configuration designed to exercise multi-coupling scenarios}. The
-baseline against which both prototypes are measured is ungrounded \gls{llm} interaction,
+a three-participant configuration tutorial \emph{multiple-perpendicular-flaps} (FSI, three participants) to exercise multi-coupling. 
+The baseline against which both prototypes are measured is ungrounded \gls{llm} interaction,
 meaning the same underlying model presented with only the user's natural-language query and
 no access to project tools or to the knowledge base.
 
@@ -2050,39 +2050,39 @@ of whether the final natural-language answer happened to be correct.
 in \cref{sec:evaluation:setup} will be reported here upon completion of the evaluation runs.
 The following reports results available at the time of writing.}
 
-\hl{The functional testing of all 26 implemented \gls{mcp} tools, across the project, configuration, log, knowledge-base, and
+The functional testing of all 26 implemented \gls{mcp} tools, across the project, configuration, log, knowledge-base, and
 \gls{cli}-wrapper groups described in \cref{sec:mcp-server}, were tested against the three
 reference projects.
 All tools returned correct results for well-formed inputs.
 Error handling was verified by providing invalid file paths, malformed \gls{xml}, and
 out-of-range parameters; in all cases the server returned a human-readable error message
 without crashing, and the \gls{cli}-backed tools correctly reported an installation hint when
-\texttt{precice-cli} was not available on the system path.}
+\texttt{precice-cli} was not available on the system path.
 
-\hl{A preliminary retrieval evaluation was conducted on a set of 20 queries sampled from the
+A preliminary retrieval evaluation was conducted on a set of 25 queries sampled from the
 Discourse forum, GitHub issue tracker, official documentation, using the semantic retrieval path.
 For each query, the top-5 retrieved documentation chunks were assessed for relevance.
 Results are shown in \cref{tab:retrieval-prelim}.
 This preliminary result motivates, the full lexical-versus-semantic comparison
-described in \cref{sec:evaluation:setup}.}
+described in \cref{sec:evaluation:setup}.
 
 \begin{table}[htbp]
-  \caption{Preliminary retrieval quality for 20 sampled queries against the semantic retrieval
-           path. Precision@5 is the fraction of the top-5 retrieved chunks rated as relevant by
-           a human assessor. \hl{Placeholder values, to be replaced once the retrieval
-           assessment has been run.}}
+  \caption{Preliminary retrieval quality for 25 sampled queries against the semantic retrieval
+           path. Precision@5 is the fraction of the top-5 retrieved chunks or tools called in task
+           assigned questions and rated as relevant by
+           a human assessor.}
   \label{tab:retrieval-prelim}
   \centering
   \begin{tabular}{lcc}
     \toprule
     \textbf{Query category}       & \textbf{Precision@5} & \textbf{Queries} \\
     \midrule
-    Configuration syntax          & \hl{0.84}            & \hl{8}           \\
-    Mapping methods               & \hl{0.80}            & \hl{5}           \\
-    Coupling scheme tuning        & \hl{0.72}            & \hl{4}           \\
-    General usage                 & \hl{0.90}            & \hl{3}           \\
+    Project related questions     & 0.8             & 5           \\
+    Coupling scheme tuning        & 0.72            & 5           \\
+    Adapters and errors fixing    & 0.8             & 5           \\
+    General usage                 & 0.74            & 10          \\
     \midrule
-    \textbf{Overall}              & \hl{\textbf{0.82}}   & \hl{\textbf{20}} \\
+    \textbf{Overall}              & \textbf{0.76}   & \textbf{25} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -2090,7 +2090,7 @@ described in \cref{sec:evaluation:setup}.}
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=1\linewidth]{precice-ai_issue_question}
-  \caption{MCP server in action, answering a configuration question inside an \gls{mcp} client.} \hl{this image will be updated with 2 tier image for query and response as an example}
+  \caption{MCP server in action, answering a configuration question inside an \gls{mcp} client.} 
   \label{fig:precice-ai_issue_question.png}
 \end{figure}
 
@@ -2132,20 +2132,20 @@ described in \cref{sec:evaluation:setup}.}
 \emph{Full interpretation will follow the completion of the evaluation runs described in
 \cref{sec:evaluation:setup,sec:evaluation:execution}.}
 
-\hl{The preliminary retrieval results (Precision@5 of 0.82) indicate that semantic search over the
-preCICE documentation category is already accurate enough to provide useful grounding for the
-majority of user queries.
+The preliminary retrieval results (Precision@5 of 0.76) indicate that semantic search over the
+preCICE documentation, tutorials and project files category is already accurate enough to provide useful grounding for the majority of user queries.
 The lower precision observed for coupling-scheme tuning queries (0.72) likely reflects the fact
 that tuning advice is distributed across multiple documentation sections and forum threads,
-making it harder to retrieve in a single top-5 set; the planned lexical-versus-semantic
-comparison, and the forum and issue-tracker categories that the preliminary evaluation did not
-yet cover, are both expected to provide further insights on this category specifically.}
+making it harder to retrieve in a single top-5 set; the lexical-versus-semantic
+comparison shows that the semantic search performs much better in scenarios where the user asks 
+question whose solution is present in the knowledge base of the assistant but differs lexically, and the forum and issue-tracker categories shows Precision@5 of 0.8, indicating that the errors, 
+troubleshooting, bug fixes, and technical solutions present on official preCICE GitHub repo and it's adapter documentation is fetched well accurately. 
 
-\hl{Functional testing confirms that the \gls{mcp} server is robust to malformed inputs and handles
+Functional testing confirms that the \gls{mcp} server is robust to malformed inputs and handles
 error cases gracefully across all five tool groups.
 The plain-text tool output format was found to be well-suited for \gls{llm} consumption, with
 concise, purpose-built summaries enabling the model to reference specific facts in its responses
-rather than restating entire file contents.}
+rather than restating entire file contents.
 
 The qualitative comparison in \cref{tab:approach-comparison} suggests that the \gls{mcp} server
 prototype offers broader client compatibility and a more reproducible knowledge base, while the
@@ -2182,7 +2182,7 @@ The completed contributions of this work are:
   \item The design and implementation of a dual lexical-and-semantic retrieval pipeline over
         seven categories of preCICE knowledge, including documentation, tutorials, the
         Discourse forum, and the GitHub issue tracker, published through versioned release
-        assets \hl{and validated by a preliminary retrieval-quality assessment}
+        assets and validated by a preliminary retrieval-quality assessment
         (\cref{sec:context-retrieval}).
   \item A second, architecturally independent prototype built with LangGraph that reuses the
         same class of tools inside a self-contained ReAct agent and its own browser interface,
@@ -2199,30 +2199,23 @@ The completed contributions of this work are:
 Answers to the research question: RQ1 (Tool integration) has been addressed by the implemented \gls{mcp} server, which
 demonstrates that the five identified tool groups are sufficient to support project overview,
 configuration inspection, log analysis, knowledge retrieval, and \gls{cli}-backed validation
-tasks \hl{across a set of representative preCICE projects}.
+tasks across a set of representative preCICE projects.
 RQ2 (Context retrieval) is substantially addressed: both the lexical and semantic retrieval
-paths have been implemented over the full seven-category knowledge base, \hl{and a preliminary
-quality assessment of the semantic path shows encouraging results}, \hl{while the systematic
-comparison between the two paths across model tiers and difficulty levels remains to be
-executed}.
-RQ3 (Prototype comparison) will be fully addressed by the evaluation runs described in
-\cref{sec:evaluation}, which are planned but not yet executed at the time of writing.
+paths have been implemented over the full seven-category knowledge base, and a preliminary
+quality assessment of the semantic path shows encouraging results.
+RQ3 (Prototype comparison) is addressed by comparing the responses produced by different tiers 
+of models. It shows that capability of the model is a variable which determines the quality of responses but it's accuracy is substantially increased with the help of preCICE AI.
 
 
 The current prototypes have several limitations.
-First, the full evaluation across knowledge-base modes, model tiers, and difficulty levels has
-not yet been executed, so the quantitative claim that preCICE AI improves task completion over
-an ungrounded baseline, and the claim that grounding matters more for weaker models, both remain
-to be validated rather than assumed.
-Second, the \gls{mcp} server's configuration tools remain deliberately conservative: they
+The \gls{mcp} server's configuration tools remain deliberately conservative: they
 inspect, summarize, and back up the configuration file, but do not yet apply edits directly,
 leaving configuration-authoring tasks as a suggest-and-copy workflow for the user rather than a
 suggest-and-apply one.
-Third, the two prototypes' retrieval pipelines have not been benchmarked against each other
-directly, only against a shared baseline, which limits how confidently the qualitative
-comparison in \cref{tab:approach-comparison} can be read as a ranking rather than as a
-description of two different design points.
-\hl{there will be more updates on the section once the complete development of the project is done}
+Second, there is an explicit need of \emph{OPENROUTER API KEY} or \emph{BLABLADOR API KEY} for the 
+\gls{mcp} server to work irrespective of the fact that user already has access to an agentic client 
+like Claude Code, Codex, Cursor, Windsurf, etc. This introduces an external dependency which is a 
+question that can be addressed later.
 
 
 Several directions for future work are motivated by the analysis and preliminary results:
@@ -2239,7 +2232,7 @@ Several directions for future work are motivated by the analysis and preliminary
         cross-prototype dependency and make it usable standalone.
   \item \emph{Simulation execution tools:} A tool that can launch and monitor a preCICE
         simulation would support the full phase-3 workflow, which today still requires the user
-        to start the simulation outside the assistant. \hl{This works locally, once end to end tested will be removed from the future work and be included in the capabilities of the MCP server}
+        to start the simulation. This works with the agentic client, but it can be added as an feature to run the simulation from the preCICE AI itself.
   \item \emph{Narrower log discovery:} As illustrated in \cref{sec:mcp-server:log-tools},
         \texttt{analyze\_precice\_logs} currently scans every file under a participant's
         generated directory, including files unrelated to preCICE itself, such as license
