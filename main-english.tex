@@ -331,7 +331,8 @@
 \input{commands}
 
 \usepackage[
-  title={Developing an AI Assistant for a Multi-Physics Coupling Library},
+  title={Design and Implementation of an AI Assistant for the
+Multi-Physics Coupling Library preCICE},
   author={Vaibhav Dange},
   type=master,
   institute=ipvs,
@@ -425,15 +426,14 @@
 \section*{Abstract}
 % ---------------------------------------------------------------
 
-Multiphysics simulation software such as preCICE is a powerful enabler of partitioned coupled
+Multiphysics simulation software - preCICE, is a powerful enabler of partitioned coupled
 simulations, yet its configuration complexity and steep learning curve present a considerable
 barrier to new and occasional users.
 This thesis investigates how an intelligent, context-aware assistant can lower this barrier by
 integrating natural-language interaction directly into the local preCICE simulation environment.
 
-General-purpose language model assistants lack grounded access to local project state,
-configuration files, and runtime logs, and are therefore unable to provide actionable,
-context-specific guidance.
+General-purpose language model assistants lack domain specific information and thus lack in providing better results 
+and responses and are therefore unable to provide actionable, context-specific guidance.
 To address this gap, two complementary prototypes were designed and implemented.
 The first is a preCICE-focused \gls{mcp} server that exposes project discovery, configuration
 inspection, log analysis, a dual lexical-and-semantic knowledge base built from the preCICE
@@ -593,7 +593,7 @@ This general question is decomposed into the following sub-questions for better 
   \item \emph{Tool integration:} Which preCICE tools, data sources, and operations are
         necessary and sufficient for an assistant to support the core user workflow, and how
         can these be exposed via an \gls{mcp} server to an \gls{mcp}-compatible client?
-  \item \emph{Context retrieval:} How can documentation and forum knowledge be
+  \item \emph{Context retrieval:} How can documentations, FAQs, discussions and forum knowledge be
         indexed and retrieved at query time to provide accurate, source-attributed answers to
         user questions about preCICE concepts and errors?
   \item \emph{Prototype comparison:} How does an \gls{mcp}-based approach, consumed
@@ -643,7 +643,7 @@ development interface.
 The implementation is described in \cref{sec:mcp-server}.
 
 Both prototypes share a dual-path retrieval pipeline that indexes content from the preCICE
-documentation, tutorials, Discourse forum, and GitHub issue tracker, combining a \gls{bm25}
+documentation, tutorials, Discourse forum, GitHub issue tracker and individual adapter documentation, combining a \gls{bm25}
 lexical index with pre-computed semantic embeddings stored locally.
 At query time, the user's question is encoded via an embedding model
 and matched against the local index; results from both paths are merged and re-ranked before
@@ -688,7 +688,7 @@ and has been observed to complete representative preCICE project-inspection and 
 Preliminary indexing of the preCICE documentation confirms that semantic search returns
 relevant passages with a precision@5 of 0.74 on a sampled set of 25 queries, exploring different
 sets of questions.
-A full quantitative evaluation across all scenarios, both prototypes, and combinations of knowledge-base 
+A full evaluation across all scenarios, both prototypes, and combinations of knowledge-base 
 mode, model capability, and question difficulty is described in \cref{sec:evaluation}.
 
 \section*{Interpretation}
@@ -888,7 +888,7 @@ The retrieved chunks are prepended to the \gls{llm}'s context window as groundin
 \gls{llm} to cite specific source passages, reducing hallucination and improving factual accuracy
 on topics not covered in the model's training data.
 For preCICE AI, \gls{rag} enables the assistant to generate its responses from the official
-documentation, tutorials and community-validated forum answers.
+documentation, tutorials, community-validated forum answers, FAQs and individual adapter documentations.
 
 \begin{definition}[Retrieval-Augmented Generation]
   Given a user query $q$ and a corpus $\mathcal{D}$ of documents, \gls{rag} retrieves a set
@@ -936,7 +936,7 @@ for tool-poisoning attacks, in which a malicious server misleads an agent throug
 descriptions rather than through the arguments it returns, underlining that the trust boundary
 in an \gls{mcp} deployment extends to the server author and not only to the end user.
 These findings directly motivate the conservative, allowlist-based command-execution design
-and the read-mostly posture of the configuration and log tools implemented in this thesis.
+and the read-mostly style of the configuration and log tools implemented in this thesis.
 
 Assessing whether an agent selects and invokes the correct tool for a given task is itself an
 active research problem.
@@ -1006,8 +1006,7 @@ The user writes or modifies the \texttt{precice-config.xml} file.
 This involves choosing an appropriate coupling scheme (serial explicit, parallel implicit, etc.),
 selecting a spatial mapping method, and tuning convergence parameters.
 The official documentation provides reference material, but finding the right configuration for
-a specific physical scenario requires understanding trade-offs that are not always clearly
-documented.
+a specific physical scenario requires understanding trade-offs.
 
 \paragraph{Phase 3: Simulation execution and monitoring.}
 The user launches the coupled simulation, which involves starting each participant in a
@@ -1083,8 +1082,8 @@ execution, and all file-system access is confined to the configured project dire
 Of these sources, the solution incorporates all of them to varying degrees. Local project files
 and log files are accessed directly at query time through the project and log tool groups,
 making them the most tightly integrated source and the primary basis for project-specific
-answers. The documentation, Discourse forum, and GitHub issue tracker are indexed offline
-into the knowledge base and retrieved at query time, meaning their content is always available
+answers. The documentation, Discourse forum, GitHub issue tracker and adapter documentations
+are indexed offline into the knowledge base and retrieved at query time, meaning their content is always available
 even without a network connection at the time of the query; the trade-off is that the index
 reflects a snapshot of these sources at the time of indexing and must be periodically
 refreshed to remain current. Configuration schema validation is delegated entirely to the
