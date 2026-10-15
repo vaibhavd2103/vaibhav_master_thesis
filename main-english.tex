@@ -330,6 +330,10 @@
 
 \input{commands}
 
+% Allow a line break after every underscore, so that long identifiers such as tool names
+% set in \texttt can wrap instead of running into the margin.
+\renewcommand{\_}{\textunderscore\allowbreak}
+
 \usepackage[
   title={Design and Implementation of an AI Assistant for the
 Multi-Physics Coupling Library preCICE},
@@ -2049,50 +2053,223 @@ of whether the final natural-language answer happened to be correct.
 in \cref{sec:evaluation:setup} will be reported here upon completion of the evaluation runs.
 The following reports results available at the time of writing.}
 
-The functional testing of all 26 implemented \gls{mcp} tools, across the project, configuration, log, knowledge-base, and
-\gls{cli}-wrapper groups described in \cref{sec:mcp-server}, were tested against the three
-reference projects.
-All tools returned correct results for well-formed inputs.
-Error handling was verified by providing invalid file paths, malformed \gls{xml}, and
-out-of-range parameters; in all cases the server returned a human-readable error message
-without crashing, and the \gls{cli}-backed tools correctly reported an installation hint when
-\texttt{precice-cli} was not available on the system path.
+The results available so far come from three sources: a functional check of the tool suite, a
+preliminary assessment of retrieval quality, and three end-to-end sessions in which the tools
+were used through two different \gls{mcp} clients.
+\Cref{tab:results-overview} lists these sources together with the tasks behind each of them.
+The structured comparison across knowledge-base modes, model tiers, and difficulty levels has not
+been carried out yet.
+The observations below therefore describe the behaviour of the \gls{mcp} server and its
+knowledge base, and they should not be read as a comparison between the two prototypes or
+between the retrieval modes.
 
-A preliminary retrieval evaluation was conducted on a set of 25 queries sampled from the
-Discourse forum, GitHub issue tracker, official documentation, using the semantic retrieval path.
-For each query, the top-5 retrieved documentation chunks were assessed for relevance.
-Results are shown in \cref{tab:retrieval-prelim}.
-This preliminary result motivates, the full lexical-versus-semantic comparison
-described in \cref{sec:evaluation:setup}.
-\hl{I will add the DaRus link for the raw logs and data of the precice-ai mcp server which can 
+\begin{table}[htbp]
+  \caption{Evidence available at the time of writing and the tasks behind it.}
+  \label{tab:results-overview}
+  \centering
+  \small
+  \begin{tabular}{>{\raggedright\arraybackslash}p{0.19\linewidth}%
+                  >{\raggedright\arraybackslash}p{0.40\linewidth}%
+                  >{\raggedright\arraybackslash}p{0.17\linewidth}%
+                  >{\raggedright\arraybackslash}p{0.10\linewidth}}
+    \toprule
+    \textbf{Evidence} & \textbf{Tasks tested} & \textbf{Scale} & \textbf{Reported in} \\
+    \midrule
+    Functional testing &
+      Calling each tool of the \gls{mcp} server directly on the reference projects, first with
+      valid input and then with invalid input (non-existent paths, malformed \gls{xml},
+      out-of-range parameters, missing \texttt{precice-cli}) &
+      All tools of the server &
+      \cref{sec:evaluation:results:functional} \\[0.8em]
+    Retrieval quality &
+      Questions about the reference projects, coupling-scheme tuning, adapters and error
+      fixing, and general usage, answered from the knowledge base through semantic retrieval &
+      25 queries, top five items judged per query &
+      \cref{sec:evaluation:results:retrieval} \\[0.8em]
+    End-to-end sessions &
+      Three natural-language requests: reporting a failed installation, asking whether a known
+      coupling problem has been fixed, and asking for an explanation of a tutorial case together
+      with run instructions &
+      3 sessions, 2 clients &
+      \cref{sec:evaluation:results:sessions} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+
+\subsection{Functional testing of the MCP tools}\label{sec:evaluation:results:functional}
+
+The tools of the \gls{mcp} server, spread over the project, configuration, log, knowledge-base,
+and \gls{cli}-wrapper groups described in \cref{sec:mcp-server}, were tested directly against
+the reference projects.
+Each tool was first called with well-formed input, and all of them returned correct results.
+The tools were then called with input that should fail: invalid file paths, malformed \gls{xml}
+in the configuration file, and out-of-range parameters.
+In all of these cases the server returned a human-readable error message and kept running
+instead of terminating the session.
+The \gls{cli}-backed tools additionally reported an installation hint when
+\texttt{precice-cli} was not available on the system path.
+This last behaviour matters in practice, because it keeps the remaining tool groups usable on a
+machine where the preCICE command-line tools are not installed.
+
+
+\subsection{Retrieval quality}\label{sec:evaluation:results:retrieval}
+
+A preliminary retrieval evaluation was conducted on 25 queries sampled from the Discourse forum,
+the GitHub issue tracker, and the official documentation, using the semantic retrieval path.
+For each query, the top five retrieved items were assessed by a human for relevance.
+\Cref{tab:retrieval-prelim} reports the resulting Precision@5 for each query category.
+This preliminary result motivates the full lexical-versus-semantic comparison described in
+\cref{sec:evaluation:setup}.
+\hl{I will add the DaRus link for the raw logs and data of the precice-ai mcp server which can
 be used to validate the evaluation results.}
 
 \begin{table}[htbp]
   \caption{Preliminary retrieval quality for 25 sampled queries against the semantic retrieval
            path. Precision@5 is the fraction of the top-5 retrieved chunks or tools called in task
-           assigned questions and rated as relevant by
-           a human assessor.}
+           assigned questions and rated as relevant by a human assessor. The numbers of assessed
+           and relevant items follow from the reported precision under the assumption of five
+           assessed items per query.}
   \label{tab:retrieval-prelim}
   \centering
-  \begin{tabular}{lcc}
+  \begin{tabular}{lcccc}
     \toprule
-    \textbf{Query category}       & \textbf{Precision@5} & \textbf{Queries} \\
+    \textbf{Query category}       & \textbf{Queries} & \textbf{Assessed items} &
+    \textbf{Relevant items} & \textbf{Precision@5} \\
     \midrule
-    Project related questions     & 0.8             & 5           \\
-    Coupling scheme tuning        & 0.72            & 5           \\
-    Adapters and errors fixing    & 0.8             & 5           \\
-    General usage                 & 0.74            & 10          \\
+    Project related questions     & 5                & 25                      & 20 & 0.80 \\
+    Coupling scheme tuning        & 5                & 25                      & 18 & 0.72 \\
+    Adapters and errors fixing    & 5                & 25                      & 20 & 0.80 \\
+    General usage                 & 10               & 50                      & 37 & 0.74 \\
     \midrule
-    \textbf{Overall}              & \textbf{0.76}   & \textbf{25} \\
+    \textbf{Overall}              & \textbf{25}      & \textbf{125}            &
+    \textbf{95}             & \textbf{0.76} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+Overall, 95 of the 125 assessed items were relevant, which gives a Precision@5 of 0.76.
+On average, a little under four of the five items returned for a query were therefore useful.
+Project-related questions and questions about adapters and error fixing reach 0.80, while
+coupling-scheme tuning is the weakest category with 0.72 (18 of 25 items).
+General usage is the largest category with ten queries and reaches 0.74.
+The categories are small, and in the three categories with five queries a single item changes
+the precision by 0.04.
+Differences of this size between categories should therefore not be over-interpreted, and the
+figures serve as a baseline for the full evaluation rather than as a ranking of the categories.
+
+
+\subsection{End-to-end sessions}\label{sec:evaluation:results:sessions}
+
+\Cref{tab:sessions} summarizes the three end-to-end sessions, which show how the tools are
+combined in practice.
+They are illustrative cases and have not yet been scored against the rubric described in
+\cref{sec:evaluation:execution}.
+
+\begin{table}[htbp]
+  \caption{End-to-end sessions with the preCICE \gls{mcp} server. Tool calls are listed in the
+           order in which they appear in the screenshots.}
+  \label{tab:sessions}
+  \centering
+  \small
+  \begin{tabular}{>{\raggedright\arraybackslash}p{0.11\linewidth}%
+                  >{\raggedright\arraybackslash}p{0.15\linewidth}%
+                  >{\raggedright\arraybackslash}p{0.25\linewidth}%
+                  >{\raggedright\arraybackslash}p{0.35\linewidth}}
+    \toprule
+    \textbf{Session} & \textbf{Client} & \textbf{Request} & \textbf{Tool calls observed} \\
+    \midrule
+    \cref{fig:claude-install-session} &
+      Claude Code &
+      Installation of preCICE 3.4.1 fails on Ubuntu 26.04 because of unsatisfiable dependencies &
+      Not shown in the screenshot \\[0.8em]
+    \cref{fig:claude-code-screenshot} &
+      Claude Code &
+      Has the coupling error between \texttt{rhoPimpleFoam} and CalculiX been fixed in any
+      preCICE version? &
+      \texttt{kb\_query\_precice}, at least five calls \\[0.8em]
+    \cref{fig:codex-screenshot} &
+      Codex &
+      Explain the \texttt{partitioned-heat-conduction} tutorial and how to run it &
+      \texttt{kb\_precice\_status}, \texttt{list\_precice\_projects},
+      \texttt{kb\_query\_precice}, \texttt{inspect\_project\_structure},
+      \texttt{find\_precice\_config}, \texttt{inspect\_precice\_config},
+      \texttt{summarize\_precice\_config}, a project preflight check, and one shell command that
+      reads the tutorial README and the run scripts \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Installation problem.}
+\Cref{fig:claude-install-session} shows the prompt of a Claude Code session (Sonnet~4.6, medium
+effort) in which the user reports that installing the preCICE 3.4.1 Debian package on
+Ubuntu~26.04 fails.
+The pasted error output lists unsatisfiable dependencies, namely the Boost development packages
+in version 1.65 or later, \texttt{libxml2}, \texttt{mpi-default-dev}, and \texttt{petsc-dev}, and
+it ends with two conflicting package assignments.
+The task requires the assistant to relate a package-manager error to the installation
+documentation of preCICE.
+Only the prompt is shown in the figure.
+
+\paragraph{Known coupling issue.}
+In the second Claude Code session (\cref{fig:claude-code-screenshot}), the user asks whether a
+problem when coupling the OpenFOAM solver \texttt{rhoPimpleFoam} with CalculiX in preCICE has
+already been fixed in any version of preCICE.
+The assistant announces that it will search the knowledge base and then issues a series of
+\texttt{kb\_query\_precice} calls.
+The first result of each of the five queries visible in the figure carries a similarity score
+between 0.58 and 0.70 (0.6368, 0.691, 0.6658, 0.6991, and 0.5762 in the raw tool output).
+The answer explains that \texttt{rhoPimpleFoam} is a compressible solver whose pressure is
+absolute, whereas the force calculation of the OpenFOAM adapter assumes the kinematic pressure of
+incompressible solvers and multiplies it by the density, which produces dimensionally wrong
+forces.
+It states that the latest releases offer no official tutorial or out-of-the-box support for this
+combination, refers to two forum threads (\#2227 and \#2935) that describe the same dimensional
+mismatch, and proposes three workarounds: configuring the adapter for a compressible solver,
+using \texttt{pimpleFoam} with a constant reference density, and patching the force calculation
+in the adapter source.
+It closes by asking for the exact error message, the adapter version, and the data fields of the
+user's configuration.
+Whether these statements are correct is a matter for the manual assessment and is not decided
+here.
+
+\paragraph{Project explanation.}
+In the Codex session (\cref{fig:codex-screenshot}), the user asks for an explanation of the
+\texttt{partitioned-heat-conduction} tutorial and for instructions on how to run it.
+Codex first loaded the preCICE AI skill and listed the files of the workspace.
+It then checked the state of the knowledge base, listed the available projects, and queried the
+knowledge base before it inspected the project structure, located and inspected the
+configuration file, and produced a summary of it.
+This order matches the freshness check described in \cref{sec:context-retrieval:integration}.
+A project preflight check and a shell command that read the tutorial README and the run scripts
+completed the information gathering, and the assistant reported that it was also checking whether
+the machine had the required runtime dependencies.
+According to the client, the turn took 35 seconds.
+The answer describes a two-dimensional heat-conduction problem on the domain $[0,2]\times[0,1]$
+with the interface at $x=1$, solved with a Dirichlet--Neumann coupling in which the Dirichlet
+participant passes the heat flux to the Neumann participant and receives the interface
+temperature in return.
+It reports the main settings of the configuration, namely serial-implicit coupling, a time
+window of 0.1, a final time of 1.0, at most 100 iterations per window, nearest-neighbor mapping,
+constant relaxation of 0.5, and a convergence limit of $10^{-10}$.
+Of the four supported solvers (FEniCS, FEniCSx, Nutils, and OpenFOAM), it recommends Nutils as
+the lightest option and gives the commands for starting the two participants in separate
+terminals.
+
+\paragraph{Observations.}
+The three sessions show the tool groups working together on tasks that need more than one
+source of information: knowledge-base retrieval alone in the second session, and project
+inspection combined with retrieval and a preflight check in the third.
+They do not yet show how reliably this happens.
+The correctness of the answers, the share of appropriate tool calls, and the effect of the
+retrieval mode and the model tier are the subject of the full evaluation.
+
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=1\linewidth]{precice-ai_issue_question}
-  \caption{MCP server in action, answering a configuration question inside an \gls{mcp} client.} 
-  \label{fig:precice-ai_issue_question.png}
+  \caption{Claude Code session (Sonnet~4.6, medium effort) in which the user reports a failed
+           installation of preCICE~3.4.1 on Ubuntu~26.04. Only the user's prompt is shown.}
+  \label{fig:claude-install-session}
 \end{figure}
 
 \begin{figure}[htbp]
